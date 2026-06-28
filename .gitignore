@@ -1,0 +1,49 @@
+# --- Node / pnpm ---
+node_modules/
+.pnpm-store/
+.pnpm-debug.log*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Build outputs ---
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+coverage/
+.nyc_output/
+
+# --- Python / uv ---
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# --- Foundry ---
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+out/
+cache/
+broadcast/
+
+# --- Editor / OS ---
+.DS_Store
+Thumbs.db
+.vscode/
+!.vscode/extensions.json
+.idea/
+
+# --- Env files ---
+.env
+.env.*
+!.env.example
+
+# --- Logs ---
+logs/
+*.log

@@ -1,0 +1,4 @@
+# Foundry library directory.
+# Run `forge install OpenZeppelin/openzeppelin-contracts@v5.0.2 --no-commit`
+# and `forge install foundry-rs/forge-std --no-commit` here once a network
+# connection is available. See ../README.md for the manual fallback.

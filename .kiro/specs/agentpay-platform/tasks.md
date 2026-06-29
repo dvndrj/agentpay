@@ -306,7 +306,7 @@ agentpay/
     - Submit a registration body without `signature` and assert HTTP 400 with `code: "signature_missing"` and `details.field == "signature"`
     - _Requirements: 1.4_
 
-- [ ] 10. AgentPay SDK (TypeScript)
+- [x] 10. AgentPay SDK (TypeScript)
   - [~] 10.1 Implement TypeScript SDK surface
     - Package at `sdk/typescript/` exports `register_agent`, `discover_agents` (stub in MVP returning `[]`), `request_quote` (stub in MVP returning a fixed-template SLA), `pay`, `get_obligation`, `set_policy`, `issue_session_key`, `revoke_session_key`
     - `pay(http402Response, sessionKey)` parses the x402 charge, signs the PaymentRequest with the session key using `noble-curves` EIP-712 typed-data, POSTs to `/v1/settle`, returns the x402 receipt

@@ -366,19 +366,19 @@ agentpay/
     - Submit fixtures violating different OpenAPI 3.1 rules and assert response contains a list of errors, one per violation, each with `path` and `reason`
     - _Requirements: 2.4_
 
-- [ ] 14. Negotiation_Engine (post-MVP)
-  - [ ] 14.1 RFQ and quote flow with deadlines
+- [X] 14. Negotiation_Engine (post-MVP)
+  - [x] 14.1 RFQ and quote flow with deadlines
     - `POST /v1/rfq`, `POST /v1/rfq/{id}/quote`, `POST /v1/rfq/{id}/accept`, `GET /v1/sla/{sla_id}`
     - Enforce consumer-provided `deadline_ms`; on expiry return `rfq_timeout` and cancel pending RFQ
     - _Requirements: 3.1, 3.2, 3.4_
-  - [ ] 14.2 SLA canonical-JSON signing by both parties
+  - [x] 14.2 SLA canonical-JSON signing by both parties
     - On accept, build canonical-JSON SLA without signatures, verify provider signature, attach consumer signature, persist; on either signature failure emit audit event and return error
     - _Requirements: 3.3, 3.5_
-  - [ ]\* 14.3 Property test P5 SLA signature verification (TypeScript, fast-check)
+  - [x]\* 14.3 Property test P5 SLA signature verification (TypeScript, fast-check)
     - **Property 5: SLA signatures verify against canonical bytes.** For any accepted RFQ producing SLA `s`, both `consumer_signature` and `provider_signature` verify against the canonical JSON encoding of `s` with those two fields excluded, using the public keys recorded on the respective handles; an SLA whose signatures fail this check is rejected and an audit event is emitted.
     - Tag with `// Feature: agentpay-platform, Property 5: ...`; generates valid and tampered SLAs and asserts acceptance/rejection plus audit emission
     - _Requirements: 3.3, 3.5_
-  - [ ]\* 14.4 Unit test R3.4 RFQ timeout
+  - [x]\* 14.4 Unit test R3.4 RFQ timeout
     - Submit RFQ with short deadline, assert response `rfq_timeout` after deadline elapses and that the RFQ row is marked cancelled
     - _Requirements: 3.4_
 

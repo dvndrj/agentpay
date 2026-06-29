@@ -472,6 +472,9 @@ importers:
       rxjs:
         specifier: '*'
         version: 7.8.2
+      uuid:
+        specifier: '*'
+        version: 14.0.1
     devDependencies:
       '@nestjs/cli':
         specifier: '*'

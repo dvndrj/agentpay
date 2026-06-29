@@ -90,6 +90,31 @@ export interface AgentPayDatabase {
     trust_score: number;
     last_updated: Date;
   };
+  rfqs: {
+    rfq_id: string;
+    consumer_handle: string;
+    provider_handle: string;
+    task_json: unknown;
+    deadline_ms: number;
+    status: string;
+    created_at: Date;
+    expires_at: Date;
+  };
+  slas: {
+    sla_id: string;
+    rfq_id: string;
+    consumer_handle: string;
+    provider_handle: string;
+    task_json: unknown;
+    price_usdc_micro: string;
+    latency_bound_ms: number;
+    success_criteria: string;
+    expiry: Date;
+    consumer_signature: string;
+    provider_signature: string;
+    schema_version: number;
+    created_at: Date;
+  };
   oversight_rejections: {
     sla_id: string;
     reviewer: string;

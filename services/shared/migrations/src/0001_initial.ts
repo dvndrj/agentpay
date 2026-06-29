@@ -201,10 +201,52 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .on("agent_metadata")
     .column("smart_account")
     .execute();
+
+  // ── rfqs (R3, post-MVP) ───────────────────────────────────────
+  await db.schema
+    .createTable("rfqs")
+    .addColumn("rfq_id", "uuid", (col) => col.primaryKey())
+    .addColumn("consumer_handle", "varchar(78)", (col) => col.notNull())
+    .addColumn("provider_handle", "varchar(78)", (col) => col.notNull())
+    .addColumn("task_json", "jsonb", (col) => col.notNull())
+    .addColumn("deadline_ms", "integer", (col) => col.notNull())
+    .addColumn("status", "varchar(20)", (col) =>
+      col.notNull().defaultTo("OPEN"))
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`now()`))
+    .addColumn("expires_at", "timestamptz", (col) => col.notNull())
+    .execute();
+
+  await db.schema
+    .createIndex("idx_rfqs_consumer")
+    .on("rfqs")
+    .column("consumer_handle")
+    .execute();
+
+  // ── slas (R3, post-MVP) ───────────────────────────────────────
+  await db.schema
+    .createTable("slas")
+    .addColumn("sla_id", "uuid", (col) => col.primaryKey())
+    .addColumn("rfq_id", "uuid", (col) => col.notNull())
+    .addColumn("consumer_handle", "varchar(78)", (col) => col.notNull())
+    .addColumn("provider_handle", "varchar(78)", (col) => col.notNull())
+    .addColumn("task_json", "jsonb", (col) => col.notNull())
+    .addColumn("price_usdc_micro", "varchar(78)", (col) => col.notNull())
+    .addColumn("latency_bound_ms", "integer", (col) => col.notNull())
+    .addColumn("success_criteria", "varchar(30)", (col) => col.notNull())
+    .addColumn("expiry", "timestamptz", (col) => col.notNull())
+    .addColumn("consumer_signature", "varchar(132)", (col) => col.notNull())
+    .addColumn("provider_signature", "varchar(132)", (col) => col.notNull())
+    .addColumn("schema_version", "integer", (col) => col.notNull().defaultTo(1))
+    .addColumn("created_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`now()`))
+    .execute();
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
   // Drop in reverse dependency order
+  await db.schema.dropTable("slas").ifExists().execute();
+  await db.schema.dropTable("rfqs").ifExists().execute();
   await db.schema.dropTable("agent_metadata").ifExists().execute();
   await db.schema.dropTable("trust_scores").ifExists().execute();
   await db.schema.dropTable("oversight_rejections").ifExists().execute();

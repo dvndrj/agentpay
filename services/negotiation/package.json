@@ -25,6 +25,7 @@
     "pg": "*",
     "reflect-metadata": "*",
     "rxjs": "*",
+    "uuid": "*",
     "@agentpay/observability": "workspace:*",
     "@agentpay/redis": "workspace:*",
     "@agentpay/kafka": "workspace:*",

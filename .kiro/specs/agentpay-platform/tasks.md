@@ -90,7 +90,7 @@ agentpay/
     - Add `contracts/src/Roles.sol` defining `RAILS_SETTLER_ROLE` and `REPUTATION_SETTLER_ROLE` constants used by all vault contracts
     - Add OpenZeppelin dependencies: `@openzeppelin/contracts@5` via `forge install`, lockfile committed under `lib/`
     - _Requirements: 4.2, 6.3, 9.3, 9.4_
-  - [-] 2.2 Implement Escrow_Vault contract
+  - [x] 2.2 Implement Escrow_Vault contract
     - `lock(bytes32 obligationId, address payer, address payee, uint256 amount)` pulls USDC via `safeTransferFrom`
     - `release(bytes32 obligationId)` and `refund(bytes32 obligationId)` callable only by `RAILS_SETTLER_ROLE`; both check `state == LOCKED`
     - Storage: `mapping(bytes32 => Escrow{ payer, payee, amount, state })`; state enum `{ NONE, LOCKED, RELEASED, REFUNDED }`

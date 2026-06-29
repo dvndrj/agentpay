@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: graphify
+        name: Update Graphify AI Knowledge Graph
+        entry: graphify .
+        language: system
+        pass_filenames: false
+        always_run: true

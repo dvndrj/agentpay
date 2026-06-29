@@ -257,8 +257,8 @@ agentpay/
     - Tag with `// Feature: agentpay-platform, Property 18: ...`; arbitrary generates random transition sequences over the alphabet `{tx_confirmed, verdict_pass, verdict_fail, settlement_revert, noise}`; balance-transfer assertion uses a mock Escrow_Vault client
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
-- [ ] 8. Settlement_Service
-  - [ ] 8.1 x402 header parser and encoder
+- [x] 8. Settlement_Service
+  - [~] 8.1 x402 header parser and encoder
     - Implement `parseX402(headerString) -> ChargeRequest` and `encodeX402(charge) -> string` in `services/settlement/src/x402/`
     - Validate fields `amount`, `asset`, `recipient`, `network`, `nonce`; reject malformed headers with `x402_parse_error`
     - _Requirements: 4.1_
@@ -287,8 +287,8 @@ agentpay/
     - Tag with `// Feature: agentpay-platform, Property 7: ...`; runs against an Anvil fork of Base Sepolia in test mode with a deterministic USDC mock token; on-chain sub-cases are additionally covered by Task 2.3
     - _Requirements: 4.2, 4.3, 9.1, 9.2_
 
-- [ ] 9. Identity_Registry service and Reputation initialisation
-  - [ ] 9.1 Implement Identity_Registry service endpoints
+- [x] 9. Identity_Registry service and Reputation initialisation
+  - [~] 9.1 Implement Identity_Registry service endpoints
     - `POST /v1/agents` verifies the Smart_Account signature over `{smart_account, metadata_hash}`, calls the on-chain `mintHandle`, persists `(handle, smart_account, metadata)` and returns `{handle, smart_account}`
     - `GET /v1/agents/{handle}` and `GET /v1/agents/by-account/{addr}` lookups
     - On duplicate registration return the existing handle without minting (uses on-chain `accountToHandle` dedupe)
@@ -306,8 +306,8 @@ agentpay/
     - Submit a registration body without `signature` and assert HTTP 400 with `code: "signature_missing"` and `details.field == "signature"`
     - _Requirements: 1.4_
 
-- [ ] 10. AgentPay SDK (TypeScript)
-  - [ ] 10.1 Implement TypeScript SDK surface
+- [x] 10. AgentPay SDK (TypeScript)
+  - [~] 10.1 Implement TypeScript SDK surface
     - Package at `sdk/typescript/` exports `register_agent`, `discover_agents` (stub in MVP returning `[]`), `request_quote` (stub in MVP returning a fixed-template SLA), `pay`, `get_obligation`, `set_policy`, `issue_session_key`, `revoke_session_key`
     - `pay(http402Response, sessionKey)` parses the x402 charge, signs the PaymentRequest with the session key using `noble-curves` EIP-712 typed-data, POSTs to `/v1/settle`, returns the x402 receipt
     - Use `viem` for chain reads (balance, allowance) before submitting

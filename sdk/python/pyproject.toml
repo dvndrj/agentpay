@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentpay-sdk"
+version = "0.0.0"
+description = "AgentPay Python SDK — x402 payments, agent registration, policy management"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "agentpay-canonical-json",
+    "coincurve==21.0.0",
+    "pycryptodome==3.22.0",
+    "requests==2.32.3",
+    "uuid6==2024.7.10",
+    "web3==7.12.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-mock"]
+
+[tool.uv.sources]
+agentpay-canonical-json = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentpay_sdk"]

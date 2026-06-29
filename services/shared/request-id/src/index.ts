@@ -21,7 +21,7 @@ export class RequestIdMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction): void {
     const existing = req.headers[REQUEST_ID_HEADER];
     const id = typeof existing === "string" && existing.length > 0 ? existing : uuidv7();
-    (req as Record<symbol, unknown>)[REQUEST_ID_SYMBOL] = id;
+    (req as unknown as Record<symbol, unknown>)[REQUEST_ID_SYMBOL] = id;
     next();
   }
 }

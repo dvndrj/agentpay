@@ -1,0 +1,37 @@
+{
+  "name": "@agentpay/migrations",
+  "version": "0.0.0",
+  "description": "Kysely migrations for AgentPay PostgreSQL schema",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/database.module.js",
+  "types": "./dist/database.module.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/database.module.d.ts",
+      "import": "./dist/database.module.js"
+    },
+    "./database.module": {
+      "types": "./dist/database.module.d.ts",
+      "import": "./dist/database.module.js"
+    }
+  },
+  "scripts": {
+    "migrate:up": "tsx src/run.ts up",
+    "migrate:down": "tsx src/run.ts down",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@nestjs/common": "*",
+    "kysely": "*",
+    "pg": "*"
+  },
+  "devDependencies": {
+    "@types/node": "*",
+    "@types/pg": "*",
+    "tsup": "*",
+    "tsx": "*",
+    "typescript": "*"
+  }
+}

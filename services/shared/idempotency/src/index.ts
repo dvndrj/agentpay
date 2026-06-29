@@ -52,7 +52,7 @@ export class IdempotencyInterceptor implements NestInterceptor {
 
     // Derive caller from the authenticated principal. In MVP this is the
     // Smart_Account address injected by an auth guard. Fall back to IP.
-    const caller = (req as Record<string, unknown>).user ?? req.ip ?? "anonymous";
+    const caller = (req as unknown as Record<string, unknown>).user ?? req.ip ?? "anonymous";
     const callerKey = String(caller);
 
     // Check if we've already seen this key

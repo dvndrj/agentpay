@@ -24,7 +24,14 @@
     "kysely": "*",
     "pg": "*",
     "reflect-metadata": "*",
-    "rxjs": "*"
+    "rxjs": "*",
+    "@agentpay/observability": "workspace:*",
+    "@agentpay/redis": "workspace:*",
+    "@agentpay/kafka": "workspace:*",
+    "@agentpay/migrations": "workspace:*",
+    "ioredis": "*",
+    "kafkajs": "*",
+    "prom-client": "*"
   },
   "devDependencies": {
     "@nestjs/cli": "*",

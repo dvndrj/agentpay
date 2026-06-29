@@ -84,6 +84,12 @@ export interface AgentPayDatabase {
     metadata_hash: string;
     registered_at: Date;
   };
+  discovery_index: {
+    handle: string;
+    vec: unknown; // pgvector vector(384)
+    trust_score: number;
+    last_updated: Date;
+  };
   oversight_rejections: {
     sla_id: string;
     reviewer: string;

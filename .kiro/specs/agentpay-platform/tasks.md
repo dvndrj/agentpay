@@ -325,7 +325,7 @@ agentpay/
     - Mock `/v1/meta/version` to return a version outside the supported range and assert exactly one warning is emitted
     - _Requirements: 11.4_
 
-- [ ] 11. AgentPay SDK (Python)
+- [x] 11. AgentPay SDK (Python)
   - [ ] 11.1 Implement Python SDK with mirrored surface
     - Package at `sdk/python/` (PEP 621 `pyproject.toml`) exposes `register_agent`, `discover_agents`, `request_quote`, `pay`, `get_obligation`, `set_policy`, `issue_session_key`, `revoke_session_key`
     - Use `web3.py` for chain reads and `coincurve` for EIP-712 signing; serialise PaymentRequest with `agentpay_canonical_json`
@@ -339,10 +339,10 @@ agentpay/
     - Test is example-based (the property-based test for P21 lives in Task 10.3 to keep one PBT per property)
     - _Requirements: 11.2, 11.3_
 
-- [ ] 12. MVP checkpoint
+- [x] 12. MVP checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Discovery_Service (post-MVP)
+- [x] 13. Discovery_Service (post-MVP)
   - [ ] 13.1 OpenAPI 3.1 validation and embedding pipeline
     - `POST /v1/discovery/providers` validates body against OpenAPI 3.1 schema; on failure return list of per-violation errors
     - Summarise endpoint descriptions and compute embedding vector (interface to embedding provider abstracted behind `EmbeddingClient`; default in-tree fake for tests)

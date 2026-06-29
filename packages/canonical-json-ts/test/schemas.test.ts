@@ -8,6 +8,7 @@ import {
   SessionKeySchema,
   decode,
   encode,
+  encodeAllowingNulls,
   validate,
 } from '../src/index.js';
 
@@ -36,11 +37,11 @@ describe('ObligationObjectSchema', () => {
   });
 
   it('round-trips through decode(encode(...))', () => {
-    const encoded = encode(validate(sampleObligation, ObligationObjectSchema));
+    const encoded = encodeAllowingNulls(validate(sampleObligation, ObligationObjectSchema));
     const decoded = decode(encoded, ObligationObjectSchema);
     expect(decoded).toEqual(sampleObligation);
     // Second round-trip is byte-identical.
-    expect(encode(validate(decoded, ObligationObjectSchema))).toBe(encoded);
+    expect(encodeAllowingNulls(validate(decoded, ObligationObjectSchema))).toBe(encoded);
   });
 
   it('rejects a non-DRAFT obligation with null tx_hash', () => {
@@ -139,10 +140,10 @@ describe('EvidenceEnvelopeSchema', () => {
   });
 
   it('round-trips through encode/decode preserving key order canonically', () => {
-    const text = encode(validate(sampleEnvelope, EvidenceEnvelopeSchema));
+    const text = encodeAllowingNulls(validate(sampleEnvelope, EvidenceEnvelopeSchema));
     const decoded = decode(text, EvidenceEnvelopeSchema);
     expect(decoded).toEqual(sampleEnvelope);
-    expect(encode(validate(decoded, EvidenceEnvelopeSchema))).toBe(text);
+    expect(encodeAllowingNulls(validate(decoded, EvidenceEnvelopeSchema))).toBe(text);
   });
 });
 

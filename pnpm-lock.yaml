@@ -362,6 +362,12 @@ importers:
       rxjs:
         specifier: '*'
         version: 7.8.2
+      uuid:
+        specifier: '*'
+        version: 14.0.1
+      viem:
+        specifier: '*'
+        version: 2.53.1(typescript@5.9.3)
     devDependencies:
       '@nestjs/cli':
         specifier: '*'

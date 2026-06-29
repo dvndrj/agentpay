@@ -184,10 +184,28 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("updated_at", "timestamptz", (col) =>
       col.notNull().defaultTo(sql`now()`))
     .execute();
+
+  // ── agent_metadata (R1.1) ─────────────────────────────────────
+  await db.schema
+    .createTable("agent_metadata")
+    .addColumn("handle", "varchar(78)", (col) => col.primaryKey())
+    .addColumn("smart_account", "varchar(42)", (col) => col.notNull())
+    .addColumn("metadata_json", "jsonb", (col) => col.notNull())
+    .addColumn("metadata_hash", "varchar(66)", (col) => col.notNull())
+    .addColumn("registered_at", "timestamptz", (col) =>
+      col.notNull().defaultTo(sql`now()`))
+    .execute();
+
+  await db.schema
+    .createIndex("idx_agent_metadata_smart_account")
+    .on("agent_metadata")
+    .column("smart_account")
+    .execute();
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
   // Drop in reverse dependency order
+  await db.schema.dropTable("agent_metadata").ifExists().execute();
   await db.schema.dropTable("trust_scores").ifExists().execute();
   await db.schema.dropTable("oversight_rejections").ifExists().execute();
   await db.schema.dropTable("discovery_index").ifExists().execute();

@@ -77,6 +77,13 @@ export interface AgentPayDatabase {
     stake_usdc_micro: string;
     updated_at: Date;
   };
+  agent_metadata: {
+    handle: string;
+    smart_account: string;
+    metadata_json: unknown;
+    metadata_hash: string;
+    registered_at: Date;
+  };
   oversight_rejections: {
     sla_id: string;
     reviewer: string;

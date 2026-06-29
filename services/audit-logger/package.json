@@ -31,7 +31,9 @@
     "@agentpay/migrations": "workspace:*",
     "ioredis": "*",
     "kafkajs": "*",
-    "prom-client": "*"
+    "prom-client": "*",
+    "class-validator": "*",
+    "class-transformer": "*"
   },
   "devDependencies": {
     "@nestjs/cli": "*",

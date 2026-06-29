@@ -183,6 +183,12 @@ importers:
       '@nestjs/platform-express':
         specifier: '*'
         version: 11.1.27(@nestjs/common@11.1.27(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.27)
+      class-transformer:
+        specifier: '*'
+        version: 0.5.1
+      class-validator:
+        specifier: '*'
+        version: 0.15.1
       ioredis:
         specifier: '*'
         version: 5.11.1
@@ -819,6 +825,9 @@ importers:
 
   services/shared/migrations:
     dependencies:
+      '@nestjs/common':
+        specifier: '*'
+        version: 11.1.27(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)
       kysely:
         specifier: '*'
         version: 0.29.2
@@ -832,6 +841,9 @@ importers:
       '@types/pg':
         specifier: '*'
         version: 8.15.6
+      tsup:
+        specifier: '*'
+        version: 8.5.1(postcss@8.5.16)(tsx@4.22.4)(typescript@5.9.3)(yaml@2.9.0)
       tsx:
         specifier: '*'
         version: 4.22.4

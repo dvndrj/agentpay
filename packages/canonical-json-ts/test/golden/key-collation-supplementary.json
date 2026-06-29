@@ -1,0 +1,11 @@
+{
+    "description": "Key collation with supplementary characters (beyond BMP)",
+    "input": {
+        "z": 1,
+        "😀": 2,
+        "a": 3,
+        "🎉": 4
+    },
+    "expected_bytes": "{\"a\":3,\"z\":1,\"🎉\":4,\"😀\":2}",
+    "notes": "BMP characters (a=U+0061, z=U+007A) should sort before supplementary plane emojis (😀=U+1F600, 🎉=U+1F389) by code point, not UTF-16 code unit"
+}

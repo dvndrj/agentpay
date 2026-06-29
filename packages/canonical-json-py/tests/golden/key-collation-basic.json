@@ -1,0 +1,14 @@
+{
+    "description": "Basic key collation by Unicode code point",
+    "input": {
+        "z": 1,
+        "a": 2,
+        "Z": 3,
+        "A": 4,
+        "0": 5,
+        "9": 6,
+        "_": 7
+    },
+    "expected_bytes": "{\"0\":5,\"9\":6,\"A\":4,\"Z\":3,\"_\":7,\"a\":2,\"z\":1}",
+    "notes": "Digits (U+0030-0039) < Uppercase (U+0041-005A) < Underscore (U+005F) < Lowercase (U+0061-007A)"
+}

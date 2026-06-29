@@ -1,0 +1,21 @@
+{
+    "description": "Nested objects with key sorting at each level",
+    "input": {
+        "user": {
+            "name": "Alice",
+            "id": "123",
+            "address": {
+                "zip": "94043",
+                "city": "Mountain View",
+                "street": "1234 Main St"
+            }
+        },
+        "tags": [
+            "urgent",
+            "payment"
+        ],
+        "count": 5
+    },
+    "expected_bytes": "{\"count\":5,\"tags\":[\"urgent\",\"payment\"],\"user\":{\"address\":{\"city\":\"Mountain View\",\"street\":\"1234 Main St\",\"zip\":\"94043\"},\"id\":\"123\",\"name\":\"Alice\"}}",
+    "notes": "Keys sorted at each nesting level; arrays preserve order"
+}

@@ -1,0 +1,11 @@
+{
+    "description": "Null values in permitted positions (after schema validation)",
+    "input": {
+        "tx_hash": null,
+        "evidence_hash": null,
+        "required_field": "present",
+        "allowed_recipients": null
+    },
+    "expected_bytes": "{\"allowed_recipients\":null,\"evidence_hash\":null,\"required_field\":\"present\",\"tx_hash\":null}",
+    "notes": "null is only valid where schema permits; this tests null serialization in sorted key context"
+}

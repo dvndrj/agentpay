@@ -1,0 +1,9 @@
+{
+    "description": "NFC vs NFD normalization test",
+    "input": {
+        "café": "résumé",
+        "naïve": "Zürich"
+    },
+    "expected_bytes": "{\"café\":\"résumé\",\"naïve\":\"Zürich\"}",
+    "notes": "Keys and values with combining characters should be NFC-normalized. é (U+00E9) vs e+◌́ (U+0065 U+0301), ï (U+00EF) vs i+◌̈ (U+0069 U+0308), ü (U+00FC) vs u+◌̈ (U+0075 U+0308)"
+}

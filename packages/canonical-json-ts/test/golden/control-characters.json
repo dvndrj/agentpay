@@ -1,0 +1,16 @@
+{
+    "description": "Control character escaping per RFC 8785",
+    "input": {
+        "backspace": "\b",
+        "tab": "\t",
+        "newline": "\n",
+        "formfeed": "\f",
+        "return": "\r",
+        "null_byte": "\u0000",
+        "unit_separator": "\u001f",
+        "quote": "\"",
+        "backslash": "\\"
+    },
+    "expected_bytes": "{\"backslash\":\"\\\\\",\"backspace\":\"\\b\",\"formfeed\":\"\\f\",\"newline\":\"\\n\",\"null_byte\":\"\\u0000\",\"quote\":\"\\\"\",\"return\":\"\\r\",\"tab\":\"\\t\",\"unit_separator\":\"\\u001f\"}",
+    "notes": "Control characters U+0000-U+001F use short escapes where available, otherwise \\uXXXX"
+}

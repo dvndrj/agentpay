@@ -1,0 +1,13 @@
+{
+    "description": "Integer boundary values within IEEE-754 safe range",
+    "input": {
+        "zero": 0,
+        "positive_small": 42,
+        "negative_small": -7,
+        "max_safe_integer": 9007199254740991,
+        "min_safe_integer": -9007199254740991,
+        "large_as_string": "18446744073709551615"
+    },
+    "expected_bytes": "{\"large_as_string\":\"18446744073709551615\",\"max_safe_integer\":9007199254740991,\"min_safe_integer\":-9007199254740991,\"negative_small\":-7,\"positive_small\":42,\"zero\":0}",
+    "notes": "Safe integers encode as numbers; integers beyond 2^53-1 must be passed as strings"
+}

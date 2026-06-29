@@ -84,7 +84,7 @@ agentpay/
     - Load shared golden fixtures, assert `encode` produces bytes equal to the TS-generated expected output, assert `decode(encode(x)) == x`
     - _Requirements: 12.1, 12.2, 12.6_
 
-- [ ] 2. On-chain contracts on Base L2 (Solidity 0.8.24, Foundry)
+- [x] 2. On-chain contracts on Base L2 (Solidity 0.8.24, Foundry)
   - [x] 2.1 Shared contract interfaces and roles
     - Create `contracts/src/interfaces/` with `IEscrowVault`, `IIdentityRegistry`, `IStakeVault`
     - Add `contracts/src/Roles.sol` defining `RAILS_SETTLER_ROLE` and `REPUTATION_SETTLER_ROLE` constants used by all vault contracts
@@ -96,43 +96,43 @@ agentpay/
     - Storage: `mapping(bytes32 => Escrow{ payer, payee, amount, state })`; state enum `{ NONE, LOCKED, RELEASED, REFUNDED }`
     - Apply OpenZeppelin `ReentrancyGuard` on every external state-changing function; emit `Locked`, `Released`, `Refunded` events
     - _Requirements: 4.2, 9.3, 9.4_
-  - [ ]\* 2.3 Forge fuzz + invariant test for Escrow_Vault (P7 on-chain sub-case, P18 on-chain sub-case)
+  - [x]\* 2.3 Forge fuzz + invariant test for Escrow_Vault (P7 on-chain sub-case, P18 on-chain sub-case)
     - **Property 7 (on-chain sub-case): Approved charge produces an escrow lock with conserved amount.** After `lock(id, P, Q, A)` succeeds, `escrows[id].amount == A`, payer is `P`, payee is `Q`, and total USDC balance across `(payer + vault)` is unchanged.
     - **Property 18 (on-chain sub-case): RAILS finality state machine.** No path moves `state` outside `{ NONE -> LOCKED -> {RELEASED, REFUNDED} }`; any second call to `release` or `refund` reverts.
     - Foundry invariant suite with handler contract; tag tests with `// Feature: agentpay-platform, Property 7/18 (on-chain): ...`; `--fuzz-runs 256`, `--invariant-runs 64`
     - _Requirements: 4.2, 4.5, 9.3, 9.4_
-  - [-] 2.4 Implement Identity_Registry contract (ERC-8004 over ERC-721)
+  - [x] 2.4 Implement Identity_Registry contract (ERC-8004 over ERC-721)
     - Inherit OpenZeppelin `ERC721` and `AccessControl`; `mintHandle(address smartAccount, bytes32 metadataHash) returns (uint256 tokenId)` reverts if `accountToHandle[smartAccount] != 0` and returns the existing tokenId via a separate `handleOf(address)` view
     - `transferHandle(uint256 tokenId, address newSmartAccount)` updates the `accountToHandle` index and emits `HandleTransferred`
     - Emit `HandleMinted(tokenId, smartAccount, metadataHash)` and `HandleTransferred(tokenId, oldAccount, newAccount)`
     - _Requirements: 1.1, 1.3, 1.5_
-  - [ ]\* 2.5 Forge fuzz test for Identity_Registry idempotent mint (P1 on-chain sub-case)
+  - [x]\* 2.5 Forge fuzz test for Identity_Registry idempotent mint (P1 on-chain sub-case)
     - **Property 1 (on-chain sub-case): Registration is idempotent.** For any address `a`, after the first call to `mintHandle(a, m)`, every subsequent `mintHandle(a, m')` reverts with `HandleAlreadyExists` and `handleOf(a)` is unchanged; ERC-721 `balanceOf(a) == 1`
     - Tag test with `// Feature: agentpay-platform, Property 1 (on-chain): ...`; `--fuzz-runs 256`
     - _Requirements: 1.1, 1.3_
-  - [-] 2.6 Implement Stake_Vault contract
+  - [x] 2.6 Implement Stake_Vault contract
     - `stake(uint256 handle, uint256 amount)` pulls USDC via `safeTransferFrom`
     - `requestWithdraw(uint256 handle, uint256 amount)` reverts when `openObligationCount[handle] > 0`
     - `slash(uint256 handle, uint256 amount, address payee)` callable only by `REPUTATION_SETTLER_ROLE`; transfers `amount` to `payee` and decrements `stakeOf[handle]`
     - `incrementOpenObligations(uint256)` / `decrementOpenObligations(uint256)` gated by `RAILS_SETTLER_ROLE`
     - _Requirements: 6.3, 6.5_
-  - [ ]\* 2.7 Forge fuzz test for Stake_Vault slash conservation (P11 on-chain)
+  - [x]\* 2.7 Forge fuzz test for Stake_Vault slash conservation (P11 on-chain)
     - **Property 11: Slashing conserves USDC across stake and counterparty.** For any FAIL verdict against handle `h` with stake `S`, counterparty `C`, and slash fraction `phi in [0, 1]`, after `slash(h, floor(S * phi), C)`: new stake is `S - floor(S * phi)`, counterparty `C` USDC balance increases by exactly `floor(S * phi)`, total USDC across stake vault and counterparty is unchanged by the slash transfer.
     - Tag test with `// Feature: agentpay-platform, Property 11: ...`; `--fuzz-runs 256`; assert across the full `(S, phi)` lattice including `S = 0`, `phi = 0`, `phi = 1`
     - _Requirements: 6.3_
-  - [ ]\* 2.8 Forge invariant test for Stake_Vault withdrawal lock (P13 on-chain sub-case)
+  - [x]\* 2.8 Forge invariant test for Stake_Vault withdrawal lock (P13 on-chain sub-case)
     - **Property 13 (on-chain sub-case): Stake withdrawal is blocked while obligations are open.** Under any sequence of `incrementOpenObligations` / `decrementOpenObligations` / `requestWithdraw` calls, `requestWithdraw` reverts whenever `openObligationCount[handle] > 0` and stake balance is unchanged.
     - Tag test with `// Feature: agentpay-platform, Property 13 (on-chain): ...`; handler-based invariant suite
     - _Requirements: 6.5_
-  - [~] 2.9 Deterministic CREATE2 deployment script
+  - [x] 2.9 Deterministic CREATE2 deployment script
     - `script/Deploy.s.sol` deploys `IdentityRegistry`, `EscrowVault`, `StakeVault` via `CREATE2` with a configured salt sourced from env
     - Produce identical addresses on Base mainnet and Base Sepolia given the same salt and bytecode; emit deployment artifact JSON to `contracts/deployments/{network}.json`
     - _Requirements: 1.1, 4.2, 6.3_
-  - [ ]\* 2.10 Gas optimisation pass for Escrow_Vault and Stake_Vault
+  - [x]\* 2.10 Gas optimisation pass for Escrow_Vault and Stake_Vault
     - Profile `lock`, `release`, `refund`, `stake`, `slash` with `forge snapshot`; remove redundant SLOADs; commit a `gas-snapshot` baseline
     - _Requirements: 4.2, 6.3_
 
-- [ ] 3. Shared service infrastructure (NestJS, Postgres, Redis, Kafka)
+- [x] 3. Shared service infrastructure (NestJS, Postgres, Redis, Kafka)
   - [ ] 3.1 Bootstrap NestJS workspace and shared libraries
     - Create `services/shared/` with `error-envelope` module (returns `{code, message, details, request_id, policy_decision_id}`), `idempotency` interceptor that stores `(caller_principal, Idempotency-Key) -> response` for 24h in Postgres, `request-id` middleware, `canonical-json` adapter wrapping `@agentpay/canonical-json`
     - Create one NestJS app shell per service under `services/{audit-logger,policy-engine,rails-ledger,settlement,identity-registry,discovery,negotiation,verification,reputation}/` using `@nestjs/cli` defaults
@@ -177,7 +177,7 @@ agentpay/
     - Export with empty range returns empty array; export across multiple handles is correctly partitioned
     - _Requirements: 10.2, 10.3_
 
-- [ ] 5. Policy_Engine service
+- [x] 5. Policy_Engine service
   - [~] 5.1 PaymentRequest schema and canonical hashing
     - Add canonical schema descriptor for `PaymentRequest` (already in canonical-json package); compute `inputs_hash` over the canonical bytes
     - Reject malformed requests with `invalid_payment_request` and structured field path
@@ -235,10 +235,10 @@ agentpay/
     - Tag with `// Feature: agentpay-platform, Property 20: ...`; populate `oversight_rejections` directly and exercise `evaluate`
     - _Requirements: 10.4, 10.5_
 
-- [~] 6. Checkpoint - foundation and Policy_Engine
+- [x] 6. Checkpoint - foundation and Policy_Engine
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 7. RAILS_Ledger service
+- [x] 7. RAILS_Ledger service
   - [~] 7.1 Obligation persistence and creation endpoint
     - `POST /v1/rails/obligations` validates `ObligationDraftRequest`, creates row in `obligations` with `finality_state = DRAFT`, returns `{obligation_id, finality_state}`
     - Enforce `Idempotency-Key` semantics and return `duplicate_obligation` on body mismatch

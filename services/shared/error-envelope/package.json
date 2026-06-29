@@ -1,0 +1,30 @@
+{
+  "name": "@agentpay/error-envelope",
+  "version": "0.0.0",
+  "description": "Structured error envelope for AgentPay NestJS services",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentpay/canonical-json": "workspace:*",
+    "@nestjs/common": "*",
+    "uuid": "*"
+  },
+  "devDependencies": {
+    "tsup": "*",
+    "typescript": "*"
+  }
+}

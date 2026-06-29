@@ -3,8 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "dist",
-    "types": ["node"],
-    "incremental": false
+    "incremental": false,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true
   },
   "include": ["src"]
 }

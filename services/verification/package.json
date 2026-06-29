@@ -1,0 +1,35 @@
+{
+  "name": "@agentpay/verification",
+  "version": "0.0.0",
+  "description": "AgentPay verification service",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentpay/canonical-json": "workspace:*",
+    "@agentpay/error-envelope": "workspace:*",
+    "@agentpay/request-id": "workspace:*",
+    "@agentpay/idempotency": "workspace:*",
+    "@agentpay/canonical-json-adapter": "workspace:*",
+    "@nestjs/common": "*",
+    "@nestjs/core": "*",
+    "@nestjs/platform-express": "*",
+    "@nestjs/config": "*",
+    "kysely": "*",
+    "pg": "*",
+    "reflect-metadata": "*",
+    "rxjs": "*"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "*",
+    "@nestjs/schematics": "*",
+    "@types/node": "*",
+    "typescript": "*"
+  }
+}

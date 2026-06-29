@@ -137,18 +137,18 @@ agentpay/
     - Create `services/shared/` with `error-envelope` module (returns `{code, message, details, request_id, policy_decision_id}`), `idempotency` interceptor that stores `(caller_principal, Idempotency-Key) -> response` for 24h in Postgres, `request-id` middleware, `canonical-json` adapter wrapping `@agentpay/canonical-json`
     - Create one NestJS app shell per service under `services/{audit-logger,policy-engine,rails-ledger,settlement,identity-registry,discovery,negotiation,verification,reputation}/` using `@nestjs/cli` defaults
     - _Requirements: 7.1, 11.3_
-  - [~] 3.2 PostgreSQL schema and migrations
+  - [ ] 3.2 PostgreSQL schema and migrations
     - Use `kysely` migrations under `services/shared/migrations/`
     - Tables: `policies(smart_account PK, per_tx_cap_usdc_micro, daily_cap_usdc_micro, updated_at)`, `session_keys(key_id PK, smart_account, public_key, not_before, not_after, bounds_json, status, issued_at, revoked_at)`, `obligations(obligation_id PK, sla_id, consumer_smart_account, provider_smart_account, amount_usdc_micro, finality_state, policy_decision_id, tx_hash, evidence_hash, created_at)`, `audit_records(record_id PK, handle, event_type, payload_json, payload_hash, prev_hash, record_hash, actor, timestamp)`, `idempotency_keys(caller, key, response_json, expires_at, PRIMARY KEY (caller, key))`, `policy_spend_events(smart_account, amount_usdc_micro, evaluated_at)` for rolling 24h spend
     - Add Postgres rule `audit_records_no_mutate` that raises an exception on UPDATE or DELETE
     - Add `discovery_index(handle, vec vector(384), trust_score, last_updated)` migration behind a `pgvector` extension guard (post-MVP service uses it)
     - _Requirements: 8.1, 9.1, 10.1, 10.2, 13.1_
-  - [~] 3.3 Redis and Kafka shared modules
+  - [ ] 3.3 Redis and Kafka shared modules
     - `services/shared/redis/` exposes `RedisClient` with `incrBy`, `expire`, and pub/sub helpers; configure a `session_key.revoked` channel
     - `services/shared/kafka/` exposes idempotent producers with `transactional.id` per service instance and consumer factory enforcing exactly-once semantics
     - Topics declared: `audit.events`, `obligation.transitions`, `policy.decisions`, `session_key.revocations`
     - _Requirements: 10.1, 13.3_
-  - [~] 3.4 Service-level health, metrics, and tracing scaffolding
+  - [ ] 3.4 Service-level health, metrics, and tracing scaffolding
     - Add `/healthz` and `/readyz` to every NestJS app
     - Wire Prometheus metrics exporter and OpenTelemetry HTTP + Kafka instrumentation
     - Declare metric stubs: `policy_decisions_total{verdict,reason_code}`, `settlement_latency_seconds`, `audit_chain_length{handle}`, `obligation_state_transitions_total{from,to}`, `session_key_revocations_total`
@@ -158,13 +158,13 @@ agentpay/
     - _Requirements: 7.1_
 
 - [ ] 4. Audit_Logger service
-  - [~] 4.1 Implement append, head, and export endpoints
+  - [ ] 4.1 Implement append, head, and export endpoints
     - `POST /v1/audit/append` validates `AuditEvent` via canonical JSON adapter, computes `payload_hash = sha256(canonical_json(payload))`, fetches `prev_hash` from Redis head per handle (fallback to Postgres on cache miss), computes `record_hash = sha256(prev_hash || payload_hash || timestamp || actor)`, persists row, advances Redis head
     - `GET /v1/audit/{handle}/head` returns latest `record_hash`
     - `GET /v1/audit/export?handle&from&to` returns matching records ordered by timestamp ascending
     - Genesis `prev_hash` is 64 hex zeros
     - _Requirements: 10.1, 10.3_
-  - [~] 4.2 Enforce immutability at app and database layers
+  - [ ] 4.2 Enforce immutability at app and database layers
     - Map Postgres mutation exception to HTTP 405 `immutable_record` via global filter
     - Reject `PATCH`/`PUT`/`DELETE` at the controller layer with the same code
     - _Requirements: 10.2_
@@ -178,16 +178,16 @@ agentpay/
     - _Requirements: 10.2, 10.3_
 
 - [x] 5. Policy_Engine service
-  - [~] 5.1 PaymentRequest schema and canonical hashing
+  - [ ] 5.1 PaymentRequest schema and canonical hashing
     - Add canonical schema descriptor for `PaymentRequest` (already in canonical-json package); compute `inputs_hash` over the canonical bytes
     - Reject malformed requests with `invalid_payment_request` and structured field path
     - _Requirements: 7.1, 12.1_
-  - [~] 5.2 Session key persistence and revocation pub/sub
+  - [ ] 5.2 Session key persistence and revocation pub/sub
     - `POST /v1/policy/session-keys` persists key metadata with `status = ACTIVE`
     - `DELETE /v1/policy/session-keys/{key_id}` writes `status = REVOKED`, `revoked_at = now`, publishes `session_key.revoked` on Redis
     - Each Policy_Engine instance subscribes to `session_key.revoked` and invalidates its in-memory cache; cache miss falls back to Postgres which is source of truth
     - _Requirements: 13.1, 13.2, 13.3_
-  - [~] 5.3 Atomic decision engine
+  - [ ] 5.3 Atomic decision engine
     - `POST /v1/policy/evaluate` runs four checks inside a single Postgres transaction with `SELECT ... FOR UPDATE` on the `(smart_account)` row plus a Redis `INCRBY` on the daily-spend counter (committed only on APPROVED):
       1. Signature check (session key signature, key ACTIVE, within `[not_before, not_after]`, within session-key bounds)
       2. Balance check (`usdc_balance >= amount + est_gas`)
@@ -197,12 +197,12 @@ agentpay/
     - On success, write the APPROVED decision to the audit log via Kafka `policy.decisions`
     - Block requests for any SLA flagged `oversight_rejected` with `oversight_rejected`
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 13.1, 13.2, 13.4_
-  - [~] 5.4 Policy CRUD and rolling 24h spend
+  - [ ] 5.4 Policy CRUD and rolling 24h spend
     - `GET /v1/policy/{smart_account}` returns `(per_tx_cap, daily_cap, rolling_24h_spend, remaining_daily)` where `remaining_daily = max(daily_cap - rolling_24h_spend, 0)`
     - `PUT /v1/policy/{smart_account}` validates body, persists, writes one `policy_update` audit record containing `P_before`, `P_after`, operator identity
     - Compute `rolling_24h_spend` from `policy_spend_events` over the trailing 24h window
     - _Requirements: 8.1, 8.2, 8.3, 8.4_
-  - [~] 5.5 Oversight rejection flag wiring
+  - [ ] 5.5 Oversight rejection flag wiring
     - Add `oversight_rejections(sla_id PK, reviewer, decided_at)` table written by Audit_Logger oversight endpoint (Task 18.2)
     - Policy_Engine reads this table during `evaluate` and returns `oversight_rejected` for any matching SLA
     - _Requirements: 10.5_
@@ -239,17 +239,17 @@ agentpay/
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 7. RAILS_Ledger service
-  - [~] 7.1 Obligation persistence and creation endpoint
+  - [ ] 7.1 Obligation persistence and creation endpoint
     - `POST /v1/rails/obligations` validates `ObligationDraftRequest`, creates row in `obligations` with `finality_state = DRAFT`, returns `{obligation_id, finality_state}`
     - Enforce `Idempotency-Key` semantics and return `duplicate_obligation` on body mismatch
     - _Requirements: 9.1_
-  - [~] 7.2 Finality state machine endpoints
+  - [ ] 7.2 Finality state machine endpoints
     - `POST /v1/rails/obligations/{id}/provisional` accepts `{tx_hash}` and transitions DRAFT -> PROVISIONAL
     - `POST /v1/rails/obligations/{id}/verdict` accepts `{performance, evidence_hash}` and transitions PROVISIONAL -> FINAL on PASS or PROVISIONAL -> REVERSED on FAIL
     - Reject any other transition with `invalid_finality_transition` and leave state unchanged
     - In MVP, the FINAL/REVERSED branches stage the transition in DB but defer on-chain release/refund to Task 18.1
     - _Requirements: 9.1, 9.2, 9.3, 9.4_
-  - [~] 7.3 Terminal-state event emission
+  - [ ] 7.3 Terminal-state event emission
     - On entry to FINAL or REVERSED, emit one `finality_transition` event to `audit.events` Kafka topic and call `Audit_Logger.append`
     - _Requirements: 9.5, 10.1_
   - [ ]\* 7.4 Property test P18 RAILS finality state machine (TypeScript, fast-check)
@@ -258,19 +258,19 @@ agentpay/
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
 
 - [ ] 8. Settlement_Service
-  - [~] 8.1 x402 header parser and encoder
+  - [ ] 8.1 x402 header parser and encoder
     - Implement `parseX402(headerString) -> ChargeRequest` and `encodeX402(charge) -> string` in `services/settlement/src/x402/`
     - Validate fields `amount`, `asset`, `recipient`, `network`, `nonce`; reject malformed headers with `x402_parse_error`
     - _Requirements: 4.1_
-  - [~] 8.2 Settle endpoint wiring Policy_Engine, RAILS, Escrow_Vault
+  - [ ] 8.2 Settle endpoint wiring Policy_Engine, RAILS, Escrow_Vault
     - `POST /v1/settle` flow per design sequence: parse header, reject `unsupported_asset`/`unsupported_network`, call `Policy_Engine.evaluate`, on APPROVED call `RAILS_Ledger.createObligation(DRAFT)`, submit `lock(obligationId, payer, payee, amount)` to Escrow_Vault via viem-based on-chain client, return x402 receipt `{tx_hash, obligation_id, policy_decision_id}`
     - On DENIED wrap inner Policy error in `policy_denied`
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 7.1, 7.6_
-  - [~] 8.3 Chain observer for DRAFT -> PROVISIONAL
+  - [ ] 8.3 Chain observer for DRAFT -> PROVISIONAL
     - BullMQ worker watches submitted tx hashes; on `k = 3` confirmations on Base, call `RAILS_Ledger.markProvisional(tx_hash)`
     - Handle reorgs below depth `k` by re-queueing; never advance until depth holds
     - _Requirements: 4.3, 9.2_
-  - [~] 8.4 Chain failure handling
+  - [ ] 8.4 Chain failure handling
     - On `transferFrom` revert, transition obligation to REVERSED via RAILS, set `tx_hash`, return `chain_revert` with `revert_reason`
     - On tx unconfirmed beyond timeout return `chain_timeout`; keep obligation in DRAFT until observer resolves
     - _Requirements: 4.5_
@@ -288,13 +288,13 @@ agentpay/
     - _Requirements: 4.2, 4.3, 9.1, 9.2_
 
 - [ ] 9. Identity_Registry service and Reputation initialisation
-  - [~] 9.1 Implement Identity_Registry service endpoints
+  - [ ] 9.1 Implement Identity_Registry service endpoints
     - `POST /v1/agents` verifies the Smart_Account signature over `{smart_account, metadata_hash}`, calls the on-chain `mintHandle`, persists `(handle, smart_account, metadata)` and returns `{handle, smart_account}`
     - `GET /v1/agents/{handle}` and `GET /v1/agents/by-account/{addr}` lookups
     - On duplicate registration return the existing handle without minting (uses on-chain `accountToHandle` dedupe)
     - Emit a `registration` audit record per design
     - _Requirements: 1.1, 1.3, 1.4_
-  - [~] 9.2 Initialise Trust_Score on registration
+  - [ ] 9.2 Initialise Trust_Score on registration
     - On successful mint, write `TrustScore{handle, score: 35, pass_count: 0, fail_count: 0, stake_usdc_micro: "0"}` to `trust_scores` table (created in 3.2 extension)
     - In MVP the Reputation_Service does not exist yet; the Identity_Registry service writes directly to `trust_scores` and Task 16 takes over CRUD post-MVP
     - _Requirements: 1.2_
@@ -307,12 +307,12 @@ agentpay/
     - _Requirements: 1.4_
 
 - [ ] 10. AgentPay SDK (TypeScript)
-  - [~] 10.1 Implement TypeScript SDK surface
+  - [ ] 10.1 Implement TypeScript SDK surface
     - Package at `sdk/typescript/` exports `register_agent`, `discover_agents` (stub in MVP returning `[]`), `request_quote` (stub in MVP returning a fixed-template SLA), `pay`, `get_obligation`, `set_policy`, `issue_session_key`, `revoke_session_key`
     - `pay(http402Response, sessionKey)` parses the x402 charge, signs the PaymentRequest with the session key using `noble-curves` EIP-712 typed-data, POSTs to `/v1/settle`, returns the x402 receipt
     - Use `viem` for chain reads (balance, allowance) before submitting
     - _Requirements: 11.1, 11.2, 4.1, 4.2, 4.3_
-  - [~] 10.2 Pin dependencies and add unsupported API version warning
+  - [ ] 10.2 Pin dependencies and add unsupported API version warning
     - Lock exact versions of `viem`, `noble-curves`, `@agentpay/canonical-json` in `package.json` (no `^` ranges)
     - On first call, fetch `/v1/meta/version`; if outside supported range, emit a single `console.warn` and continue
     - _Requirements: 11.4_
@@ -326,32 +326,32 @@ agentpay/
     - _Requirements: 11.4_
 
 - [ ] 11. AgentPay SDK (Python)
-  - [~] 11.1 Implement Python SDK with mirrored surface
+  - [ ] 11.1 Implement Python SDK with mirrored surface
     - Package at `sdk/python/` (PEP 621 `pyproject.toml`) exposes `register_agent`, `discover_agents`, `request_quote`, `pay`, `get_obligation`, `set_policy`, `issue_session_key`, `revoke_session_key`
     - Use `web3.py` for chain reads and `coincurve` for EIP-712 signing; serialise PaymentRequest with `agentpay_canonical_json`
     - _Requirements: 11.1, 11.2, 4.1, 4.2, 4.3_
-  - [~] 11.2 Pin dependencies and add unsupported API version warning
+  - [ ] 11.2 Pin dependencies and add unsupported API version warning
     - Pin exact versions of `web3`, `coincurve`, `agentpay_canonical_json` in `pyproject.toml`
     - On first call, fetch `/v1/meta/version`; on mismatch raise `warnings.warn` exactly once
     - _Requirements: 11.4_
-  - [~] 11.3 Mirror P21 behaviour in Python SDK as a deterministic unit test
+  - [ ] 11.3 Mirror P21 behaviour in Python SDK as a deterministic unit test
     - Use mocked HTTP transport to assert: SDK surfaces structured `{code, message}` to caller, performs no retry, does not mutate local cache
     - Test is example-based (the property-based test for P21 lives in Task 10.3 to keep one PBT per property)
     - _Requirements: 11.2, 11.3_
 
-- [~] 12. MVP checkpoint
+- [ ] 12. MVP checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 13. Discovery_Service (post-MVP)
-  - [~] 13.1 OpenAPI 3.1 validation and embedding pipeline
+  - [ ] 13.1 OpenAPI 3.1 validation and embedding pipeline
     - `POST /v1/discovery/providers` validates body against OpenAPI 3.1 schema; on failure return list of per-violation errors
     - Summarise endpoint descriptions and compute embedding vector (interface to embedding provider abstracted behind `EmbeddingClient`; default in-tree fake for tests)
     - Upsert `(handle, vec, trust_score, last_updated)` into `discovery_index`
     - _Requirements: 2.1, 2.4_
-  - [~] 13.2 Search endpoint with trust-score filter
+  - [ ] 13.2 Search endpoint with trust-score filter
     - `GET /v1/discovery/search?q&min_trust_score&limit` returns up to 50 handles ordered by cosine similarity descending, filtered by `trust_score >= min_trust_score`
     - _Requirements: 2.2, 2.3_
-  - [~] 13.3 Deregistration with 60-second propagation
+  - [ ] 13.3 Deregistration with 60-second propagation
     - `DELETE /v1/discovery/providers/{handle}` removes row; expose a guarantee that subsequent reads after 60s exclude the handle (via cache TTL <= 60s)
     - _Requirements: 2.5_
   - [ ]\* 13.4 Property test P3 search filter and ordering (TypeScript, fast-check)
@@ -367,11 +367,11 @@ agentpay/
     - _Requirements: 2.4_
 
 - [ ] 14. Negotiation_Engine (post-MVP)
-  - [~] 14.1 RFQ and quote flow with deadlines
+  - [ ] 14.1 RFQ and quote flow with deadlines
     - `POST /v1/rfq`, `POST /v1/rfq/{id}/quote`, `POST /v1/rfq/{id}/accept`, `GET /v1/sla/{sla_id}`
     - Enforce consumer-provided `deadline_ms`; on expiry return `rfq_timeout` and cancel pending RFQ
     - _Requirements: 3.1, 3.2, 3.4_
-  - [~] 14.2 SLA canonical-JSON signing by both parties
+  - [ ] 14.2 SLA canonical-JSON signing by both parties
     - On accept, build canonical-JSON SLA without signatures, verify provider signature, attach consumer signature, persist; on either signature failure emit audit event and return error
     - _Requirements: 3.3, 3.5_
   - [ ]\* 14.3 Property test P5 SLA signature verification (TypeScript, fast-check)
@@ -383,15 +383,15 @@ agentpay/
     - _Requirements: 3.4_
 
 - [ ] 15. Verification_Mesh (post-MVP)
-  - [~] 15.1 Evidence_Envelope parser and log attestation verifier
+  - [ ] 15.1 Evidence_Envelope parser and log attestation verifier
     - `POST /v1/verify/evidence` parses canonical-JSON `EvidenceEnvelope`, validates `envelope_hash`, `prev_hash` against the obligation's chain, `observed_latency_ms <= sla.latency_bound_ms`, `now <= sla.expiry`, and the log attestation signature
     - Reject envelopes with neither `log_attestation` nor `tee_attestation`
     - _Requirements: 5.1, 5.3_
-  - [~] 15.2 Verdict emission and refund trigger
+  - [ ] 15.2 Verdict emission and refund trigger
     - Emit `PASS` to `RAILS_Ledger.markVerdict` on success, `FAIL` on failure or SLA expiry
     - Write one verdict audit record containing verdict, verifier identity, and envelope hash
     - _Requirements: 5.3, 5.4, 5.5_
-  - [~] 15.3 TEE attestation plug-in interface
+  - [ ] 15.3 TEE attestation plug-in interface
     - Define `TeeAttestationVerifier` interface with a single `verify(quote, measurement, signerRoot)` method; ship a placeholder implementation that rejects all quotes with `unsupported_attestation` so v2 can drop in real verifiers without touching call sites
     - _Requirements: 5.2_
   - [ ]\* 15.4 Property test P9 verification verdict function (TypeScript, fast-check)
@@ -400,17 +400,17 @@ agentpay/
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
 - [ ] 16. Reputation_Service (post-MVP)
-  - [~] 16.1 Trust_Score update on verdicts
+  - [ ] 16.1 Trust_Score update on verdicts
     - Subscribe to `obligation.transitions` topic; on FINAL (PASS) increment `trust_score` by configured `reputation_pass_delta` capped at 100, on REVERSED (FAIL) decrement by `reputation_fail_delta` floored at 0
     - _Requirements: 6.1, 6.2_
-  - [~] 16.2 Stake_Vault integration
+  - [ ] 16.2 Stake_Vault integration
     - `POST /v1/reputation/stake` calls on-chain `Stake_Vault.stake`; `POST /v1/reputation/stake/withdraw` calls `requestWithdraw`; on FAIL verdict trigger `slash(handle, floor(stake * phi), counterparty)` via the `REPUTATION_SETTLER_ROLE` relayer
     - `phi` is a platform constant for v1 (open design decision noted in design.md)
     - _Requirements: 6.3, 6.5_
-  - [~] 16.3 Reputation query endpoint
+  - [ ] 16.3 Reputation query endpoint
     - `GET /v1/reputation/{handle}` returns `{trust_score, total_count, success_rate, stake_usdc_micro}` with `total_count = pass_count + fail_count` and `success_rate = pass_count / total_count` (or `null` when `total_count == 0`)
     - _Requirements: 6.4_
-  - [~] 16.4 Block withdrawal while open obligations
+  - [ ] 16.4 Block withdrawal while open obligations
     - Reject withdrawal at service layer with `pending_obligations` whenever `open_obligation_count(handle) > 0`; the contract enforces the same invariant on-chain via `requestWithdraw` revert
     - _Requirements: 6.5_
   - [ ]\* 16.5 Property test P10 Trust_Score clamped arithmetic (TypeScript, fast-check)
@@ -427,7 +427,7 @@ agentpay/
     - _Requirements: 6.5_
 
 - [ ] 17. Identity_Registry handle transfer (post-MVP)
-  - [~] 17.1 Implement handle transfer endpoint
+  - [ ] 17.1 Implement handle transfer endpoint
     - `POST /v1/agents/{handle}/transfer` verifies signature, calls on-chain `transferHandle`, leaves `trust_scores` row untouched, appends one `transfer` audit record containing `{handle, old_smart_account, new_smart_account, signature}`
     - _Requirements: 1.5_
   - [ ]\* 17.2 Property test P2 transfer preserves trust and audit history (TypeScript, fast-check)
@@ -436,11 +436,11 @@ agentpay/
     - _Requirements: 1.5_
 
 - [ ] 18. FINAL and REVERSED finality plus oversight intervention (post-MVP)
-  - [~] 18.1 Wire verdict to on-chain release or refund
+  - [ ] 18.1 Wire verdict to on-chain release or refund
     - Extend `RAILS_Ledger.markVerdict` so PASS triggers `Escrow_Vault.release(obligationId)` and FAIL triggers `Escrow_Vault.refund(obligationId)`
     - Emit `finality_transition` audit record per terminal state
     - _Requirements: 9.3, 9.4, 9.5_
-  - [~] 18.2 Oversight intervention pause and decision endpoints
+  - [ ] 18.2 Oversight intervention pause and decision endpoints
     - Add `POST /v1/audit/oversight/decide` to Audit_Logger: writes `oversight_decision` record and, on `reject`, inserts `oversight_rejections(sla_id, reviewer, decided_at)` so Policy_Engine (Task 5.5) denies subsequent payments
     - Add `oversight_pause` audit event emitted from Audit_Logger when an agent configured with intervention reaches the named reasoning step; reviewer notification transport stub returns 423 `intervention_pending` until a decision is made
     - _Requirements: 10.4, 10.5_
@@ -449,20 +449,193 @@ agentpay/
     - _Requirements: 10.1, 10.2_
 
 - [ ] 19. Integration verification
-  - [~] 19.1 Docker Compose test bench
+  - [ ] 19.1 Docker Compose test bench
     - `docker-compose.test.yml` runs Postgres (with pgvector), Redis, Kafka (KRaft single-broker), and an Anvil fork of Base Sepolia
     - `tests/e2e/bootstrap/` migrates schemas, deploys contracts via `forge script` against Anvil, and seeds a known operator key, USDC mock, and Smart_Account
     - _Requirements: 4.2, 9.1, 10.1_
-  - [~] 19.2 Cross-service end-to-end automated scenario
+  - [ ] 19.2 Cross-service end-to-end automated scenario
     - Implement under `tests/e2e/` a jest test that walks: register_agent (MVP) → request_quote (post-MVP) → pay (x402) → submit evidence → verdict PASS → FINAL → release; and a parallel scenario covering FAIL → REVERSED → refund
     - Verify Property 18 transitions across services and audit chain integrity end-to-end (Property 19)
     - _Requirements: 1.1, 4.2, 4.3, 5.1, 5.3, 5.4, 9.1, 9.2, 9.3, 9.4, 9.5, 10.1_
-  - [~] 19.3 CI workflow runs the full PBT and forge suites
+  - [ ] 19.3 CI workflow runs the full PBT and forge suites
     - GitHub Actions workflow under `.github/workflows/ci.yml` runs in order: `pnpm install`, `pnpm -r build`, `pnpm -r test` (jest with fast-check, minimum 100 iterations enforced via `numRuns`), `uv run pytest` (hypothesis with `max_examples=100`), `forge test --fuzz-runs 256 --invariant-runs 64`, and the docker-compose E2E scenario from 19.2
     - Workflow fails on any PBT counterexample or forge invariant violation
     - _Requirements: 12.3, 12.4, 12.6_
   - [~] 19.4 Final checkpoint
     - Ensure all tests pass, ask the user if questions arise.
+
+## Dashboard and Finalized Decisions
+
+The following tasks extend the build with the operator dashboard surface and lock in the three ADRs that introduce concrete new work (ADR-1 EmbeddingClient, ADR-2 verification_roots, ADR-3 KMS-backed RAILS_Settler). ADRs 4-9 are already implicit in Tasks 1-19 and require no new work. New properties P26-P29 join the same CI workflow defined in Task 19.3. Optional sub-tasks remain marked with `*` per the convention used above.
+
+- [ ] 20. Finalized design decisions (ADR-1, ADR-2, ADR-3)
+  - [ ] 20.1 EmbeddingClient interface and default Sentence-Transformers implementation (ADR-1)
+    - Define `EmbeddingClient` interface in `services/discovery/src/embeddings/` with a single `embed(text: string): Promise<Float32Array>` returning a 384-dim vector
+    - Ship a default `SentenceTransformersClient` backed by self-hosted `all-MiniLM-L6-v2` via a sidecar `embed-service` container exposing a thin HTTP endpoint; stub `OpenAIEmbeddingClient` and `VoyageEmbeddingClient` selectable by a `discovery.embedding_provider` config key
+    - Migrate Discovery_Service (Task 13.1) call sites to use the interface; keep the in-tree deterministic fake under `test/` for property tests (P3)
+    - _Requirements: 2.1, 2.4_
+  - [ ] 20.2 `verification_roots` table and TEE verifier scaffolding (ADR-2)
+    - Add kysely migration creating `verification_roots(vendor, root_pem, fingerprint, effective_from, effective_to)` with uniqueness on `(vendor, fingerprint)` and an index on `(vendor, effective_from)`; insertion-only access pattern (no UPDATE/DELETE) enforced at the service layer
+    - Implement `RootStore.pickFor(vendor, producedAt)` selecting the row whose window contains `producedAt`; reject with `unsupported_attestation` when none matches
+    - Extend the `TeeAttestationVerifier` interface from Task 15.3 with `vendor: "sev-snp" | "tdx"` and wire it to `RootStore`; ship a placeholder implementation that still rejects all quotes with `unsupported_attestation`
+    - _Requirements: 5.1, 5.2_
+  - [ ]* 20.3 SEV-SNP and TDX verifier implementations (post-MVP, ADR-2)
+    - Implement AMD SEV-SNP (VCEK chain) and Intel TDX (PCS chain) quote verifiers against the `verification_roots` store; extend Property 9 coverage to `success_criteria == "tee_attestation"`
+    - _Requirements: 5.1, 5.2_
+  - [ ] 20.4 KMS-backed signer for `RAILS_Settler` role (ADR-3)
+    - Add `services/shared/kms-signer/` exposing a `KmsEcdsaSigner` wrapping AWS KMS asymmetric ECDSA (`Sign` API with `MessageType=DIGEST`, `SigningAlgorithm=ECDSA_SHA_256`), normalising to low-s and returning viem-compatible `{r, s, v}` for EIP-1559 tx signing
+    - Migrate Settlement_Service's on-chain client (Tasks 8.2 and 8.4) so every `lock`/`release`/`refund` call submitted under `RAILS_SETTLER_ROLE` routes through the KMS signer; key material never leaves KMS and the signer is instantiated from `RAILS_SETTLER_KMS_KEY_ID` env
+    - Document `grantRole` / `revokeRole` rotation procedure in `contracts/deployments/README.md` and surface a `kms_sign_failure` settlement error code on transient KMS errors
+    - _Requirements: 4.2, 9.3, 9.4_
+  - [ ]* 20.5 Integration test for KMS-signed settlement round-trip
+    - Stand up `localstack` KMS in `docker-compose.test.yml`, mint a test ECDSA key, and assert the recovered address from a viem-encoded settlement tx equals the `RAILS_SETTLER_ROLE` holder across `lock`, `release`, and `refund` over randomly generated obligation parameters
+    - _Requirements: 4.2, 9.3, 9.4_
+
+- [ ] 21. Dashboard auth and ownership middleware
+  - [ ] 21.1 SIWE auth service endpoints
+    - New NestJS app at `services/auth/` implementing `POST /v1/auth/challenge`, `POST /v1/auth/verify`, `POST /v1/auth/refresh`, `POST /v1/auth/logout`
+    - Challenge persists `(nonce, smart_account, expires_at)` in Postgres with single-use semantics (marked consumed on first verify, TTL <= 10 minutes)
+    - Verify validates the SIWE message (domain, chainId, statement, nonce, issued_at, expiration_time), recovers the signer via `personal_sign` for EOAs and EIP-1271 for ERC-4337 Smart_Accounts, and issues `{access_token, refresh_token}` with `sub = smart_account`, short access TTL, rotation-on-use refresh
+    - Map error conditions to `siwe_message_invalid`, `siwe_nonce_unknown`, `siwe_expired`, `signature_invalid`
+    - _Requirements: 1.1, 8.1, 8.3, 10.1_
+  - [ ] 21.2 Gateway JWT middleware
+    - Add `JwtAuthGuard` in `services/shared/auth/` validating the access-token signature against the platform session key, enforcing `exp` and `iat`, and attaching `{principal: smart_account}` to the request context
+- Task 19 is the integration verification gate. The CI workflow defined in 19.3 runs every PBT (`fast-check` + `hypothesis` + `forge`) plus the cross-service E2E scenario; this is the build's correctness contract.
+- Tasks 20-24 layer on the operator dashboard (`apps/dashboard/`, Next.js 14) and lock in ADR-1 / ADR-2 / ADR-3. Tasks 20-22 are backend (NestJS services, KMS signer, new endpoints, SSE projector); Task 23 is the dashboard client; Task 24 is the closing checkpoint. P26-P29 are added to the same CI workflow defined in 19.3.
+    - Forward `x-actor-account = principal` to downstream services so Audit_Logger records the authenticated operator
+    - Map failures to `jwt_expired` and `jwt_invalid`
+    - _Requirements: 1.1, 10.1_
+  - [ ] 21.3 Ownership-scoping middleware
+    - Add `OwnershipGuard` in `services/shared/auth/` that resolves the requested handle (from path, body, or query) to its owning Smart_Account via Identity_Registry and rejects with `forbidden_handle` (HTTP 403) when `O(handle) != principal`
+    - Apply uniformly to `GET /v1/agents/by-account/{addr}`, `GET /v1/policy/{smart_account}`, `PUT /v1/policy/{smart_account}`, session-key endpoints, `GET /v1/obligations/{id}`, `GET /v1/audit/export`, `GET /v1/audit/export/page`, `GET /v1/rfq/{id}`, `GET /v1/sla/{sla_id}`, `GET /v1/verify/verdicts/by-handle/{handle}`, `POST /v1/reputation/stake*`, and `GET /v1/dashboard/events`
+    - _Requirements: 1.1, 1.5, 8.1, 8.3, 10.1, 10.3_
+  - [ ] 21.4 Register new error codes in the shared catalogue
+    - Add `siwe_message_invalid` (400), `siwe_nonce_unknown` (400), `siwe_expired` (401), `jwt_expired` (401), `jwt_invalid` (401), `forbidden_handle` (403), `stream_topic_invalid` (400) to `services/shared/error-envelope/`
+    - _Requirements: 7.1, 10.1_
+  - [ ]* 21.5 Property test P27 SIWE -> JWT subject binding (TypeScript, fast-check)
+    - **Property 27: SIWE authentication binds the issued JWT subject to the signing Smart_Account.** For any Smart_Account `a`, challenge nonce `c`, and signature `s` produced by `a` over the SIWE message containing `c` and an unexpired `expiration_time`, `/v1/auth/verify(message, s)` returns a JWT whose `sub` claim equals `a` and whose signature verifies under the platform session key. For any signature `s'` not produced by `a` over the same message, or any message whose `expiration_time` has passed, `/v1/auth/verify` returns `signature_invalid` and issues no token.
+    - Tag with `// Feature: agentpay-platform, Property 27: ...`; uses `genSiweFlow()` parameterised over (wrong signer, expired window, mutated message, mutated signature, valid)
+    - _Requirements: 7.1, 8.1, 8.3, 10.1_
+  - [ ]* 21.6 Property test P28 ownership-scoped dashboard reads (TypeScript, fast-check)
+    - **Property 28: Dashboard reads are scoped to handles owned by the authenticated Smart_Account.** For any authenticated dashboard principal `p`, any ownership universe `O` mapping handles to owning Smart_Accounts, and any request to a dashboard-served read endpoint or SSE subscription `req` referencing handle `h`, the response contains records or events for `h` iff `O(h) == p`; when `O(h) != p`, the request is rejected with `forbidden_handle` and no record for `h` is emitted. The rule holds uniformly across `GET /v1/agents/by-account/{addr}`, `GET /v1/policy/{smart_account}`, `PUT /v1/policy/{smart_account}`, session-key endpoints, `GET /v1/obligations/{id}`, `GET /v1/audit/export`, `GET /v1/audit/export/page`, `GET /v1/rfq/{id}`, `GET /v1/sla/{sla_id}`, `GET /v1/verify/verdicts/by-handle/{handle}`, `POST /v1/reputation/stake*`, and `GET /v1/dashboard/events`.
+    - Tag with `// Feature: agentpay-platform, Property 28: ...`; uses `genOwnershipUniverse()` driving mixed read/subscription workloads across all enumerated endpoints
+    - _Requirements: 1.1, 1.5, 8.1, 8.3, 10.1, 10.3_
+
+- [ ] 22. Dashboard-supporting backend endpoints
+  - [ ] 22.1 Cursor-paginated audit export
+    - Add `GET /v1/audit/export/page?handle&from&to&cursor?&limit` to Audit_Logger
+    - Cursor is an opaque base64 token encoding `(record_id, record_hash)`; server returns at most `min(limit, 200)` records ordered ascending by timestamp and a `next_cursor` if more remain (or `null` when exhausted)
+    - Server validates that `cursor.record_hash` matches the stored row before continuing; reject with `cursor_invalid` (HTTP 400) otherwise so any out-of-band mutation surfaces immediately to the client
+    - The single-shot `/v1/audit/export` from Task 4.1 is preserved unchanged for compliance bulk-pull
+    - _Requirements: 10.1, 10.3_
+  - [ ] 22.2 Verification verdicts by handle
+    - Add `GET /v1/verify/verdicts/by-handle/{handle}?from&to&cursor?&limit` to Verification_Mesh returning the verdict timeline (verdict, verifier identity, envelope hash, timestamp) for the handle, ordered ascending by timestamp, cursor-paginated as in 22.1
+    - Pure read over the existing verdict store; no write-path change
+    - _Requirements: 5.3, 5.4, 5.5_
+  - [ ] 22.3 SSE dashboard event projector
+    - Add `GET /v1/dashboard/events?topics=...` to the Gateway, authenticated by the JWT middleware from 21.2 and scoped by the ownership middleware from 21.3
+    - Per-connection Kafka consumer with a unique `group.id`, subscribed to the requested subset of `{obligation.transitions, oversight.decisions, audit.events, session_key.revocations}`; events flushed to `text/event-stream` with `id: <topic>:<partition>:<offset>` after applying the ownership filter
+    - On reconnect with `Last-Event-ID`, seek the underlying consumer to `offset + 1` per `(topic, partition)` and replay the filtered tail; preserve per-partition commit order
+    - Reject unknown or unauthorised topics with `stream_topic_invalid`
+    - _Requirements: 9.5, 10.1, 10.4, 13.3_
+  - [ ]* 22.4 Property test P26 paginated audit export equivalence and chain continuity (TypeScript, fast-check)
+    - **Property 26: Paginated audit export equals single-shot export and preserves chain continuity.** For any handle `h`, time range `[from, to]`, and page size `n` in `[1, 200]`, repeatedly calling `/v1/audit/export/page` from a null cursor while feeding `next_cursor` back until it is null produces a sequence of pages whose concatenation, in order, equals the result of `/v1/audit/export` over the same `(h, from, to)`. Furthermore, for any two records `r_i`, `r_{i+1}` that fall on adjacent positions across a page boundary, `r_{i+1}.prev_hash == r_i.record_hash`.
+    - Tag with `// Feature: agentpay-platform, Property 26: ...`; uses `genAuditPageWalk()` producing `(handle, from, to, page_size in [1,200])` plus a randomised underlying audit chain
+    - _Requirements: 10.1, 10.3_
+  - [ ]* 22.5 Property test P29 SSE projector completeness, exclusion, and ordering (TypeScript, fast-check)
+    - **Property 29: Real-time event stream is a complete, ordered, ownership-filtered projection of Kafka.** For any authenticated dashboard principal `p`, any set of subscribed topics `T` drawn from `{obligation.transitions, oversight.decisions, audit.events, session_key.revocations}`, any ownership universe `O`, and any sequence of Kafka events `E` committed during the connection, the SSE stream produced by `GET /v1/dashboard/events?topics=T` is exactly the sub-sequence of `E` consisting of events `e` such that `e.topic in T` and `O(e.handle) == p`, preserving the per-partition commit order of `E`. After a reconnect carrying `Last-Event-ID = id`, the stream contains exactly the events of the filtered sub-sequence whose commit offset is strictly greater than the offset encoded by `id`.
+    - Tag with `// Feature: agentpay-platform, Property 29: ...`; runs against the embedded Kafka in `docker-compose.test.yml`; the arbitrary feeds randomised event sequences across multiple partitions and exercises at least one forced disconnect-reconnect cycle to drive the `Last-Event-ID` resume path
+    - _Requirements: 9.5, 10.1, 10.4, 13.3_
+
+- [ ] 23. Operator Dashboard (Next.js 14)
+  - [ ] 23.1 Scaffold dashboard package
+    - Create `apps/dashboard/` as a Next.js 14 App Router project (React 18, TypeScript strict, ESLint + Prettier matching the workspace); add to `pnpm-workspace.yaml`
+  '17. Identity_Registry handle transfer (post-MVP)':
+    ['9. Identity_Registry service and Reputation initialisation']
+  '18. FINAL and REVERSED finality plus oversight intervention (post-MVP)':
+    ['7. RAILS_Ledger service', '15. Verification_Mesh (post-MVP)']
+  '19. Integration verification': ['12. MVP checkpoint']
+  '20. Finalized design decisions (ADR-1, ADR-2, ADR-3)':
+    [
+      '8. Settlement_Service',
+      '13. Discovery_Service (post-MVP)',
+      '15. Verification_Mesh (post-MVP)',
+    ]
+  '21. Dashboard auth and ownership middleware':
+    [
+      '3. Shared service infrastructure (NestJS, Postgres, Redis, Kafka)',
+      '9. Identity_Registry service and Reputation initialisation',
+    ]
+  '22. Dashboard-supporting backend endpoints':
+    [
+      '4. Audit_Logger service',
+      '15. Verification_Mesh (post-MVP)',
+      '21. Dashboard auth and ownership middleware',
+    ]
+  '23. Operator Dashboard (Next.js 14)':
+    [
+      '10. AgentPay SDK (TypeScript)',
+      '21. Dashboard auth and ownership middleware',
+      '22. Dashboard-supporting backend endpoints',
+    ]
+  '24. Final checkpoint - dashboard and finalized decisions':
+    [
+      '20. Finalized design decisions (ADR-1, ADR-2, ADR-3)',
+      '23. Operator Dashboard (Next.js 14)',
+    ]
+``` - On failure render the structured error code verbatim (`siwe_message_invalid`, `siwe_nonce_unknown`, `siwe_expired`, `signature_invalid`)
+    - _Requirements: 1.1, 8.1, 8.3, 10.1_
+  - [ ] 23.3 `/discover` page
+    - Server component fetching `GET /v1/discovery/search?q&min_trust_score&limit`; client component renders results sorted by similarity with a `min_trust_score` slider and `limit` selector (max 50)
+    - _Requirements: 2.2, 2.3_
+  - [ ] 23.4 `/agents/{handle}` detail page
+    - Server component fetching `GET /v1/agents/{handle}` and `GET /v1/reputation/{handle}`; render handle metadata, smart_account, trust score, success rate, stake balance, and the most recent verdict timeline entries via `GET /v1/verify/verdicts/by-handle/{handle}`
+    - _Requirements: 1.1, 6.4_
+  - [ ] 23.5 `/my-agents` list page
+    - Server component fetching `GET /v1/agents/by-account/{addr}` for the authenticated principal; table linking each row to per-handle policy, session-keys, obligations, and audit pages
+    - _Requirements: 1.1, 1.5_
+  - [ ] 23.6 `/my-agents/{handle}/policy` editor
+    - Form bound to `GET /v1/policy/{smart_account}` (read) and `PUT /v1/policy/{smart_account}` (write)
+    - Sign the `PolicyUpdate` EIP-712 typed struct (ADR-7 domain separator) with the operator wallet before submit; on success surface the returned `policy_update` audit record id
+    - _Requirements: 8.1, 8.2, 8.3, 10.1_
+  - [ ] 23.7 `/my-agents/{handle}/session-keys` manager
+    - List active keys via Policy_Engine session-key read; "Issue key" form signs a `SessionKeyIssuance` EIP-712 struct (ADR-7) and posts to `POST /v1/policy/session-keys`; per-row "Revoke" calls `DELETE /v1/policy/session-keys/{key_id}`
+    - Render `[not_before, not_after]` and bounds inline; show a banner driven by the SSE hook when a key is revoked elsewhere
+    - _Requirements: 13.1, 13.2, 13.3_
+  - [ ] 23.8 `/my-agents/{handle}/obligations` list
+    - Server component fetching obligations for the handle; client component renders a table of `(obligation_id, finality_state, amount, counterparty, created_at)` with live finality transitions merged in from the SSE hook (Task 23.10)
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+  - [ ] 23.9 `/my-agents/{handle}/audit` hash-chain viewer
+    - Paginated viewer over `GET /v1/audit/export/page`, rendering each record's `payload`, `payload_hash`, `prev_hash`, `record_hash`, `actor`, `timestamp`
+    - Per-page chain verification: recompute `record_hash = sha256(prev_hash || payload_hash || timestamp || actor)` client-side for every record in the loaded page and assert continuity across the page boundary (`pages[k+1][0].prev_hash == pages[k].last.record_hash`); display a per-record verification badge and surface `chain_verification_failed` in the UI on mismatch
+    - "Export full range" action streams the entire `/v1/audit/export` response for compliance bulk-pull
+    - _Requirements: 10.1, 10.3_
+  - [ ] 23.10 SSE client hook with reconnect and Last-Event-ID
+    - `useDashboardEvents(topics)` hook connecting to `GET /v1/dashboard/events?topics=...`, dispatching events into a Zustand store keyed by `(topic, handle)`
+    - Persist the last seen `id` per topic; on reconnect, send `Last-Event-ID` to resume; exponential backoff capped at 30 s
+    - Drives finality-state UI updates (Task 23.8), oversight decision toasts, and session-key revocation banners (Task 23.7)
+    - _Requirements: 9.5, 10.1, 10.4, 13.3_
+  - [ ]* 23.11 Provider-side views (post-MVP)
+    - `/my-agents/{handle}/rfq-inbox`, `/my-agents/{handle}/slas`, `/my-agents/{handle}/evidence` using `GET /v1/rfq/{id}`, `GET /v1/sla/{sla_id}`, and `GET /v1/verify/verdicts/by-handle/{handle}`
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 5.3, 5.4, 5.5_
+  - [ ]* 23.12 Stake and reputation views (post-MVP)
+    - `/my-agents/{handle}/stake` form posting to `POST /v1/reputation/stake` and `POST /v1/reputation/stake/withdraw`; reputation history charts driven by `GET /v1/reputation/{handle}`
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+  - [ ]* 23.13 `/oversight` reviewer queue (post-MVP)
+    - Reviewer workqueue listing `oversight_pause` events from the SSE stream; per-row decision form that signs an `OversightDecision` EIP-712 struct (ADR-7) and posts to `POST /v1/audit/oversight/decide`
+    - _Requirements: 10.4, 10.5_
+
+- [ ] 24. Final checkpoint - dashboard and finalized decisions
+  - Ensure all tests pass, ask the user if questions arise.
+
+### Property-to-task index (addendum)
+
+| Property                                                  | Task | Library    |
+| --------------------------------------------------------- | ---- | ---------- |
+| P26 Paginated audit export equivalence + chain continuity | 22.4 | fast-check |
+| P27 SIWE -> JWT subject binding                           | 21.5 | fast-check |
+| P28 Ownership-scoped reads across dashboard endpoints     | 21.6 | fast-check |
+| P29 SSE projector completeness, exclusion, and ordering   | 22.5 | fast-check |
 
 ## Property-to-task index
 

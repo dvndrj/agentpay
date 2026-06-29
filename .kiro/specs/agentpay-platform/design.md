@@ -27,8 +27,10 @@ This design realises the full vision specified in `requirements.md` while drawin
 | R11 SDK | MVP | TypeScript SDK first, Python SDK alongside MVP launch. |
 | R12 Canonical JSON | MVP | Required for signing Obligation/Evidence from day one. |
 | R13 Session Keys | MVP | Issuance, expiry, revocation, bounds. |
+| Operator Dashboard (read-model) | MVP slice | Wallet connect, agent discovery (stub backend in MVP), my-agents, obligations list, audit log viewer, policy editor, session-key manager. |
+| Operator Dashboard (reputation history, oversight reviewer UI) | Post-MVP | Charts, reviewer workqueue; depend on Reputation_Service and oversight intervention being live. |
 
-The MVP slice (R1, R4, R7, R8, R9 partial, R10 partial, R11, R12, R13) delivers end-to-end agent payments under enforced policy with auditable records. Subsequent slices add discovery, negotiation, verification, and reputation behind the same RAILS and Policy contracts.
+The MVP slice (R1, R4, R7, R8, R9 partial, R10 partial, R11, R12, R13, plus the dashboard MVP slice) delivers end-to-end agent payments under enforced policy with auditable records and a first-class UI surface over them. Subsequent slices add discovery, negotiation, verification, and reputation behind the same RAILS and Policy contracts.
 
 ## Architecture
 
@@ -42,6 +44,7 @@ graph TB
     SDKts[AgentPay SDK TS]
     SDKpy[AgentPay SDK Python]
     Agent[Agent runtime: LangGraph + MCP]
+    DASH[Operator Dashboard: Next.js + viem]
   end
 
   subgraph EdgeAPI[NestJS API Gateway]
@@ -79,6 +82,9 @@ graph TB
   Agent --> SDKpy
   SDKts --> GW
   SDKpy --> GW
+  DASH --> GW
+  GW -.SSE projector.-> DASH
+  KAF -.event stream.-> GW
   GW --> IR & DS & NE & SS & RS & AL
   SS --> PE
   PE --> RL
@@ -352,6 +358,85 @@ revoke_session_key(key_id) -> void
 ```
 
 Both packages pin exact versions of `viem`/`web3.py`, `noble-curves`/`coincurve`, and a shared `@agentpay/canonical-json` (TS) / `agentpay_canonical_json` (Python) library that implements the canonical JSON spec. The SDK fetches `/v1/meta/version` on first call and emits a single warning if the platform's API version is outside the SDK's supported range.
+
+### Operator Dashboard
+
+A first-party web client that gives consumers an easy way to connect a Smart Account and discover agents, and gives agent owners visibility into their agents' policy state, session keys, obligations, finality progression, audit chain, and reputation. The dashboard is a read-model client over the existing `/v1` APIs plus a thin auth surface; it does not introduce a new core service and is not on the payment data path.
+
+**Architecture placement.** The dashboard is a Next.js 14 (App Router) application using `viem` for wallet interaction and the existing `@agentpay/sdk` for typed API calls. Server components issue API requests through the same NestJS API Gateway as the SDKs; no service-to-service traffic bypasses the gateway. Authentication state is held in a `httpOnly` session cookie carrying a short-lived JWT (15-minute access, 7-day refresh) signed by the Gateway. The dashboard does not custody keys: every signing operation (policy change, session-key issuance, oversight decision) is performed by the user's connected wallet via EIP-712.
+
+**Authentication.** Sign-In With Ethereum (SIWE / EIP-4361) challenge-response. Flow:
+
+1. `POST /v1/auth/challenge` returns a nonce and a SIWE message template bound to `(domain, smart_account, issued_at, expiration_time)`.
+2. The dashboard asks the wallet to sign the SIWE message via `personal_sign` or, for ERC-4337 accounts, an EIP-1271 signature.
+3. `POST /v1/auth/verify` validates the signature, asserts `expiration_time` not yet passed, and issues `{access_token, refresh_token}` with `sub = smart_account`.
+4. All subsequent dashboard requests carry the access token; the Gateway forwards `x-actor-account` to backing services so audit records record the authenticated operator.
+
+**Route and page surface.**
+
+| Route | Audience | Purpose |
+|---|---|---|
+| `/connect` | All | SIWE wallet connect, network check, account linkage |
+| `/discover` | Consumers | Search bar, `min_trust_score` filter, ranked list of provider handles, capability summary, latency/price hints |
+| `/agents/{handle}` | All | Provider detail: metadata, OpenAPI summary, Trust_Score, past SLAs, success rate |
+| `/my-agents` | Agent owners | List of agents owned by the connected Smart_Account, link to detail pages |
+| `/my-agents/{handle}/policy` | Agent owners | View current policy, edit per-tx and daily caps, submit signed update |
+| `/my-agents/{handle}/session-keys` | Agent owners | Issue, view, revoke session keys; show ACTIVE/REVOKED/EXPIRED status |
+| `/my-agents/{handle}/obligations` | Agent owners (consumer side) | Paginated list of obligations the handle is paying for, finality state, tx hash, evidence hash, link to verdict |
+| `/my-agents/{handle}/inbox/rfqs` (post-MVP) | Provider-side agent owners | Incoming RFQs, accept/decline, quote drafting |
+| `/my-agents/{handle}/slas` (post-MVP) | Provider-side agent owners | Signed SLAs the handle is party to (consumer or provider), with counterparty, price, expiry, current obligation status |
+| `/my-agents/{handle}/evidence` (post-MVP) | Provider-side agent owners | Evidence_Envelope submissions per obligation, verifier verdicts (PASS/FAIL), envelope hash chain, link to finality transition |
+| `/my-agents/{handle}/stake` (post-MVP) | Agent owners | Current stake balance, slashing history, stake/withdraw actions (withdraw blocked while open obligations exist, surfaced inline) |
+| `/my-agents/{handle}/audit` | Agent owners + compliance | Hash-chained audit log viewer; per-page chain verification badge; CSV/JSON export |
+| `/my-agents/{handle}/reputation` (post-MVP) | Agent owners | Trust_Score over time, pass/fail breakdown |
+| `/oversight` (post-MVP) | Human reviewers | Pending intervention queue with approve/reject decisions |
+
+**API surface.** The dashboard reuses existing `/v1` endpoints; net-new endpoints are limited to authentication and one paginated read variant of audit export:
+
+```
+POST   /v1/auth/challenge          body: { smart_account } -> { nonce, siwe_message, expires_at }
+POST   /v1/auth/verify             body: { siwe_message, signature } -> { access_token, refresh_token }
+POST   /v1/auth/refresh            body: { refresh_token } -> { access_token }
+POST   /v1/auth/logout             body: { refresh_token } -> 204
+GET    /v1/audit/export/page       query: handle, from, to, cursor?, limit<=200 -> { records[], next_cursor|null }
+```
+
+`/v1/audit/export/page` is a cursor-paginated variant of the existing single-shot `/v1/audit/export`. Cursor is an opaque base64 token encoding `(record_id, record_hash)`; the server returns at most `limit` records and a `next_cursor` if more remain. The single-shot export is preserved for compliance bulk-pull workflows.
+
+All other dashboard data needs are satisfied by existing endpoints: `GET /v1/agents/{handle}`, `GET /v1/agents/by-account/{addr}`, `GET /v1/discovery/search`, `GET /v1/policy/{smart_account}`, `PUT /v1/policy/{smart_account}`, `POST /v1/policy/session-keys`, `DELETE /v1/policy/session-keys/{key_id}`, `GET /v1/obligations/{id}`, `GET /v1/reputation/{handle}`, `POST /v1/audit/oversight/decide`. Provider-side views consume `GET /v1/rfq/{id}` and `GET /v1/sla/{sla_id}` (already defined on `Negotiation_Engine`) and a new read endpoint `GET /v1/verify/verdicts/by-handle/{handle}` (a thin filter over the existing `Verification_Mesh` verdict store) for the evidence/verdict timeline; the underlying state and write paths are unchanged.
+
+**Real-time updates.** The Gateway exposes a Server-Sent Events stream at `GET /v1/dashboard/events?topics=...` authenticated by the same SIWE-issued JWT. The stream is a per-connection projection over the Kafka families defined in ADR-9, scoped to handles the authenticated `smart_account` owns (Property 28 below). The dashboard subscribes to:
+
+- `obligation.transitions` for handles owned by the authenticated operator → push finality-state UI updates (DRAFT → PROVISIONAL → FINAL/REVERSED) without a poll;
+- `oversight.decisions` and `audit.events` filtered to `event_type in {oversight_pause, oversight_decision}` → push reviewer-queue updates and pause/resume banners;
+- `session_key.revocations` → push session-key status changes within the 10s window already guaranteed by Property 25.
+
+The SSE projector is a thin consumer over Kafka with no business logic; it filters by ownership and forwards the canonical event payload as `data:` lines. There is no service-side state machine introduced. Reconnection uses the standard SSE `Last-Event-ID` header; the projector returns events strictly newer than that id from the consumer's committed offset.
+
+```
+GET /v1/dashboard/events           query: topics=obligation.transitions,oversight.decisions,session_key.revocations,audit.events
+                                   header: Authorization: Bearer <jwt>
+                                   -> text/event-stream of canonical event JSON
+```
+
+**Read-model consistency.** The dashboard is a thin read-model over services that already enforce the correctness properties. The view-model layer does not derive new totals: it displays the values returned by `GET /v1/policy/{smart_account}` directly (covered by Property 17), the obligation finality states returned by RAILS (covered by Property 18), the Trust_Score returned by Reputation_Service (covered by Property 12), and the session-key status returned by Policy_Engine (covered by Property 24). Four universally-quantified properties are genuinely new and are introduced for the dashboard surface: Property 26 (audit export pagination equivalence and chain continuity across page boundaries), Property 27 (SIWE authentication binds the JWT subject to the signing Smart_Account), Property 28 (dashboard reads are scoped to handles owned by the authenticated Smart_Account), and Property 29 (real-time event stream emits exactly the finality, oversight, and revocation events for owned handles, in commit order).
+
+**MVP slice vs post-MVP.**
+
+| Capability | Scope | Notes |
+|---|---|---|
+| SIWE wallet connect, session JWT | MVP | Required for any dashboard action. |
+| `/discover` page over `GET /v1/discovery/search` | MVP | In MVP the backend returns a stubbed empty list; the page is functional and ready to light up when R2 ships. |
+| `/agents/{handle}` detail | MVP | |
+| `/my-agents`, `/my-agents/{handle}/obligations` | MVP | |
+| `/my-agents/{handle}/audit` viewer with paginated export and per-page chain verification | MVP | Uses new `/v1/audit/export/page`. |
+| `/my-agents/{handle}/policy` editor | MVP | Signed via wallet. |
+| `/my-agents/{handle}/session-keys` manager | MVP | Issue, list, revoke. |
+| Real-time SSE for finality transitions, oversight, session-key revocations | MVP | `GET /v1/dashboard/events`; ownership-scoped projection. |
+| Provider-side RFQ inbox, SLA list, evidence/verdict timeline | Post-MVP | Depends on Negotiation_Engine (R3) and Verification_Mesh (R5). |
+| Stake management UI | Post-MVP | Depends on Reputation_Service stake endpoints (R6). |
+| `/my-agents/{handle}/reputation` charts | Post-MVP | Depends on Reputation_Service (R6). |
+| `/oversight` reviewer queue | Post-MVP | Depends on oversight intervention path (R10.4, R10.5). |
 
 ## Data Models
 
@@ -705,6 +790,30 @@ The properties below were derived from the prework analysis. Each property is un
 
 **Validates: Requirements 13.3**
 
+### Property 26: Paginated audit export equals single-shot export and preserves chain continuity
+
+*For any* handle `h`, time range `[from, to]`, and page size `n` in `[1, 200]`, repeatedly calling `/v1/audit/export/page` from a null cursor while feeding `next_cursor` back until it is null produces a sequence of pages whose concatenation, in order, equals the result of `/v1/audit/export` over the same `(h, from, to)`. Furthermore, for any two records `r_i`, `r_{i+1}` that fall on adjacent positions across a page boundary, `r_{i+1}.prev_hash == r_i.record_hash`.
+
+**Validates: Requirements 10.1, 10.3**
+
+### Property 27: SIWE authentication binds the issued JWT subject to the signing Smart_Account
+
+*For any* Smart_Account `a`, challenge nonce `c`, and signature `s` produced by `a` over the SIWE message containing `c` and an unexpired `expiration_time`, `/v1/auth/verify(message, s)` returns a JWT whose `sub` claim equals `a` and whose signature verifies under the platform session key. For any signature `s'` not produced by `a` over the same message, or any message whose `expiration_time` has passed, `/v1/auth/verify` returns `signature_invalid` and issues no token.
+
+**Validates: Requirements 7.1, 8.1, 8.3, 10.1**
+
+### Property 28: Dashboard reads are scoped to handles owned by the authenticated Smart_Account
+
+*For any* authenticated dashboard principal `p` (a Smart_Account established by SIWE), any ownership universe `O` mapping handles to owning Smart_Accounts, and any request to a dashboard-served read endpoint or SSE subscription `req` referencing handle `h`, the response contains records or events for `h` iff `O(h) == p`; when `O(h) != p`, the request is rejected with `forbidden_handle` and no record for `h` is emitted. The rule holds uniformly across `GET /v1/agents/by-account/{addr}`, `GET /v1/policy/{smart_account}`, `PUT /v1/policy/{smart_account}`, session-key endpoints, `GET /v1/obligations/{id}`, `GET /v1/audit/export`, `GET /v1/audit/export/page`, `GET /v1/rfq/{id}`, `GET /v1/sla/{sla_id}`, `GET /v1/verify/verdicts/by-handle/{handle}`, `POST /v1/reputation/stake*`, and `GET /v1/dashboard/events`.
+
+**Validates: Requirements 1.1, 1.5, 8.1, 8.3, 10.1, 10.3**
+
+### Property 29: Real-time event stream is a complete, ordered, ownership-filtered projection of Kafka
+
+*For any* authenticated dashboard principal `p`, any set of subscribed topics `T` drawn from `{obligation.transitions, oversight.decisions, audit.events, session_key.revocations}`, any ownership universe `O`, and any sequence of Kafka events `E` committed during the connection, the SSE stream produced by `GET /v1/dashboard/events?topics=T` is exactly the sub-sequence of `E` consisting of events `e` such that `e.topic in T` and `O(e.handle) == p`, preserving the per-partition commit order of `E`. After a reconnect carrying `Last-Event-ID = id`, the stream contains exactly the events of the filtered sub-sequence whose commit offset is strictly greater than the offset encoded by `id`.
+
+**Validates: Requirements 9.5, 10.1, 10.4, 13.3**
+
 ## Error Handling
 
 ### Structured error envelope
@@ -769,6 +878,19 @@ The SDK MUST not retry any of these; they are deterministic denials.
 | `signature_invalid` | signature does not verify | 401 |
 | `handle_not_found` | unknown handle | 404 |
 
+### Dashboard auth and stream error codes
+
+| Code | Cause | HTTP |
+|---|---|---|
+| `siwe_message_invalid` | malformed SIWE message, wrong domain, or mismatched `chainId` | 400 |
+| `siwe_nonce_unknown` | `nonce` not previously issued by `/v1/auth/challenge` or already consumed | 400 |
+| `siwe_expired` | SIWE message `expiration_time` has passed at verify time | 401 |
+| `signature_invalid` | SIWE signature does not recover to the claimed `smart_account` (shared with Identity_Registry) | 401 |
+| `jwt_expired` | bearer access token past `exp` | 401 |
+| `jwt_invalid` | bearer access token signature does not verify | 401 |
+| `forbidden_handle` | authenticated principal does not own the requested handle | 403 |
+| `stream_topic_invalid` | requested SSE topic outside the allowed set | 400 |
+
 ### Idempotency and retries
 
 - All write endpoints require an `Idempotency-Key` header. Stored result keyed by `(caller_principal, key)` for 24 hours; replay returns the original response.
@@ -819,6 +941,10 @@ Domain generators are defined once per data type and reused across tests:
 - `genEvidenceEnvelope()` chains hashes through `prev_hash` and randomises which of `log_attestation` and `tee_attestation` is populated (with the schema invariant that at least one is non-null).
 - `genPaymentRequest()` parameterises over (under cap, over cap, over daily, low balance, valid sig, invalid sig, expired key, key out of bounds) to drive P14.
 - `genCanonicalJsonScalar()` covers unicode normalisation edge cases (NFC vs NFD), integer boundary values, and key collation, to stress P22 and P23.
+- `genAuditPageWalk()` produces a random `(handle, from, to, page_size in [1,200])` plus an underlying audit chain, to stress P26.
+- `genSiweFlow()` produces a `(smart_account, nonce, expiration_time, signature)` tuple with parameterised tampering (wrong signer, expired window, mutated message, mutated signature) to stress P27.
+- `genOwnershipUniverse()` produces a random `(principal, handles_owned, handles_not_owned)` configuration plus a mixed read/subscription workload over the dashboard-served endpoints and SSE topics, to stress P28.
+- `genSsePlayback()` produces a random Kafka commit log over the four subscribed topics plus a sequence of connect/disconnect/reconnect-with-Last-Event-ID actions, to stress P29.
 
 ### Edge case coverage (non-property)
 
@@ -835,18 +961,117 @@ The following criteria are covered by example/edge tests rather than properties:
 - **Chain integration.** Foundry forks Base Sepolia for end-to-end tests covering Property 7 (escrow lock + balance decrement) and Property 11 (slashing conservation).
 - **Cross-service.** A docker-compose test bench runs Postgres, Redis, Kafka, and a Sepolia fork; an end-to-end scenario exercises agent registration → RFQ → x402 settlement → verification → finality, validating Property 18 across services.
 - **Audit chain.** A long-running fuzz test issues random events and periodically verifies Property 19 over the persisted records.
+- **Dashboard read-model.** Property tests for P26 (paginated audit export equivalence and chain continuity), P27 (SIWE-to-JWT subject binding), P28 (ownership-scoped reads across the dashboard surface), and P29 (SSE projector completeness, exclusion, and ordering against the Kafka commit log) live alongside the Audit_Logger, authentication, gateway authorization, and SSE projector respectively; they exercise the dashboard's net-new API surface without booting the Next.js client. The dashboard itself relies on the upstream services for correctness and is covered by component-level UI smoke tests, not additional property tests, since all derived totals are passed through unchanged from properties already proven elsewhere (P12, P17, P18, P24).
 
-## Open Design Decisions
+## Finalized Design Decisions
 
-The following decisions are documented as open and should be resolved before or during task planning. They do not block writing tasks for the MVP slice, but each will influence the build:
+The following decisions, previously marked open, are now finalized. Each entry summarises the choice, the rationale, the trade-offs against alternatives considered, MVP vs post-MVP implications, and any new components, interfaces, or properties introduced. Where a decision touches an existing section (Components, Data Models, Error Handling, Testing Strategy), that section is the source of truth; the entries here retain the short ADR for traceability.
 
-1. **Embedding model for Discovery.** Self-hosted Sentence-Transformers vs hosted OpenAI/voyage embeddings. Affects latency, cost, and data residency.
-2. **TEE attestation roots.** Which TEEs to accept in v2 (AMD SEV-SNP, Intel TDX, Nitro Enclaves) and how attestation roots are bootstrapped and rotated.
-3. **Relayer architecture for the `RAILS_Settler` role.** Single hot wallet vs threshold-signed multisig (Safe) on Base; affects throughput, key management, and incident recovery.
-4. **Per-policy slash fraction `phi`.** Single platform constant vs per-handle configurable vs per-SLA configurable. Recommendation: platform constant for v1, per-handle in v2.
-5. **Sub-cent settlement.** Whether v1 ships single-tx settlement (gas floor sets practical minimum around 0.1 cent on Base) or a batched-settlement aggregator (lower per-payment cost, more state). Recommendation: single-tx for MVP, batched-settlement post-MVP.
-6. **Oversight reviewer transport.** Webhook + dashboard, email, or both. Affects audit_logger surface and SDK integration.
-7. **Session key signing scheme.** EIP-712 typed-data signing (compatible with most wallets) vs raw ECDSA over canonical JSON. Recommendation: EIP-712 with a fixed `AgentPayPayment` typed-data schema.
-8. **Canonical JSON dependency choice.** Pull in an existing JCS implementation (e.g. `@trust/jcs`) and harden it, or ship our own and own the spec. Recommendation: own the spec; vendored JCS implementations differ on number handling.
-9. **Kafka topic granularity.** One topic per event type vs one topic per service. Affects consumer group design and the audit reconciliation worker.
+### ADR-1: Embedding model for Discovery — self-hosted Sentence-Transformers (MVP), pluggable provider abstraction
+
+**Decision.** Default to the self-hosted `all-MiniLM-L6-v2` model from `sentence-transformers` (384-dim) for the Discovery_Service embedding pipeline. Wrap it behind an `EmbeddingClient` interface so a hosted provider (OpenAI `text-embedding-3-small`, Voyage `voyage-2`) can be swapped in by configuration.
+
+**Rationale.** Self-hosted keeps capability descriptors and embedding-time queries on AgentPay infrastructure (no third-party data residency leak for what is effectively the agent capability graph), removes per-call cost from a path that is read-heavy, and gives deterministic latency. `all-MiniLM-L6-v2` is small enough to run on the same node as the service in MVP and matches the 384-dim `pgvector` column declared in the schema.
+
+**Alternatives considered.** OpenAI/Voyage hosted embeddings: higher recall on long-tail capabilities, but add per-request cost, network latency, and a third-party dependency on an arguably sensitive index.
+
+**MVP vs post-MVP.** MVP ships the `EmbeddingClient` interface with the self-hosted default; in MVP the Discovery_Service is stubbed (Task 13 is post-MVP) so the interface is exercised by tests only. Post-MVP can switch providers per environment without code change.
+
+**Affects.** `Discovery_Service` indexing pipeline; `discovery_index.vec vector(384)` migration retained; no new properties.
+
+### ADR-2: TEE attestation roots — accept AMD SEV-SNP and Intel TDX in v2; rotate via Verification_Mesh config
+
+**Decision.** The `tee_attestation` verifier in v2 accepts AMD SEV-SNP and Intel TDX quotes. AWS Nitro Enclaves are deferred (they are not a hardware TEE in the same threat model and require a separate verifier flow). Attestation roots (AMD VCEK chain root, Intel PCS root) are bootstrapped from vendor-published roots, pinned by SHA-256, and stored in `verification_roots(vendor, root_pem, fingerprint, effective_from, effective_to)`. Rotation is performed by adding a new row with a future `effective_from`, never by mutating existing rows; verification picks the root row whose window contains the quote's `produced_at`.
+
+**Rationale.** SEV-SNP and TDX are both CPU-vendor-rooted, widely available on Azure, GCP, and bare metal, and produce attestation quotes with stable measurement semantics. Nitro Enclaves use AWS-signed attestation documents (different verification path and a single-vendor trust root); they are a v3 candidate.
+
+**Alternatives considered.** Single-vendor TEE (lock-in risk); accept anything (collapses the security model); roll our own attestation (out of scope).
+
+**MVP vs post-MVP.** TEE attestation lives entirely in v2 (Task 15.3 plug-in interface is a placeholder in MVP). The schema and rotation policy are documented now so v2 ships without re-litigating roots.
+
+**Affects.** Verification_Mesh; new table `verification_roots`; refines Property 9's coverage of `success_criteria == "tee_attestation"`; no new top-level property.
+
+### ADR-3: RAILS_Settler relayer — single hot wallet in MVP, threshold-signed Safe multisig from v2
+
+**Decision.** The `RAILS_SETTLER_ROLE` is held by a single hot-wallet EOA in MVP, with the private key in a hardware-backed KMS (AWS KMS or GCP KMS asymmetric ECDSA), and lock/release/refund calls routed through it. From v2, the role is migrated to a 2-of-3 Safe multisig with off-chain ECDSA pre-signing and on-chain Safe execution; key rotation is performed by `grantRole`/`revokeRole` on the vault contracts.
+
+**Rationale.** A single KMS-backed signer keeps MVP latency low (single signature per settlement, sub-second), is operationally well-understood, and lets us ship before negotiating signer governance. The threshold-signed Safe upgrade closes the single-point-of-compromise risk for production volumes without changing the on-chain contracts (the role abstraction already supports it).
+
+**Alternatives considered.** Safe multisig from day one (adds a quorum-coordination delay to every settlement, which interacts badly with sub-cent payments); raw EOA with a local key file (rejected for key-management reasons).
+
+**MVP vs post-MVP.** MVP wires KMS-backed signing; v2 swaps the holder of `RAILS_SETTLER_ROLE` to a Safe address with the same role grants. No contract change is required.
+
+**Affects.** Settlement_Service and RAILS_Ledger on-chain client; operations runbook (key rotation procedure); no new property.
+
+### ADR-4: Per-policy slash fraction `phi` — platform constant in v1, per-handle configurable in v2
+
+**Decision.** `phi` is a single platform-deployment constant in v1, exposed as `reputation_slash_fraction` in the Reputation_Service config (default 10%). v2 introduces per-handle `phi` stored on the `trust_scores` row with a platform-wide max bound to prevent griefing. Per-SLA `phi` is rejected as a permanent design choice because it lets a counterparty negotiate punishment outside the platform's risk framing.
+
+**Rationale.** A platform constant gives operators a single number to reason about and keeps Property 11 (slashing conservation) trivially provable. Per-handle in v2 lets high-stakes providers opt into a stricter regime without forcing it on the long tail.
+
+**Alternatives considered.** Per-SLA `phi`: declined as above. Per-handle from day one: declined because v1 has no stake UI for setting it.
+
+**MVP vs post-MVP.** v1 uses the config constant; v2 adds a `slash_fraction_bps integer` column on `trust_scores` and a setter endpoint.
+
+**Affects.** Reputation_Service config and contract; Property 11 wording is unchanged ("configured slash fraction `phi`" already accommodates either source).
+
+### ADR-5: Sub-cent settlement — single-tx in MVP, batched aggregator post-MVP behind an interface
+
+**Decision.** MVP ships single-tx settlement: one on-chain `lock` per obligation. Post-MVP introduces a `SettlementBatcher` worker that aggregates locks for a short window (target: 250 ms, max 50 obligations per batch) into a single multicall, lowering effective per-payment gas cost roughly proportional to batch size. The user-visible obligation lifecycle and Property 7 are preserved; batched obligations remain individually addressable on-chain via their obligation id.
+
+**Rationale.** Base L2 single-tx gas at current prices is roughly 0.0001–0.0005 USD, so single-tx already supports payments above ~0.1 cent; this is sufficient for the MVP target use cases. Building a batcher in MVP would block the launch on a bespoke aggregator and complicate the finality state machine. Reserving the batcher as a swap-in lets the contracts stay unchanged.
+
+**Alternatives considered.** State channels (high coordination cost, multi-party trust assumptions); off-chain ledger with periodic settlement (re-introduces fiat-style reconciliation, defeats the point of x402).
+
+**MVP vs post-MVP.** Single-tx for MVP; batcher post-MVP. The `Escrow_Vault.lock` ABI already supports batching via a multicall wrapper, no contract change required.
+
+**Affects.** Settlement_Service; future `SettlementBatcher` worker; no new property (Property 7 is preserved per-obligation).
+
+### ADR-6: Oversight reviewer transport — webhook + dashboard, with email as opt-in notification only
+
+**Decision.** Oversight reviewers are notified primarily via the `/oversight` dashboard page (post-MVP). A platform-configured webhook can also be registered per agent to push `oversight_pause` events to an external system (e.g. Slack, Linear, a SOC ticketing tool). Email is supported as an opt-in notification channel via the same webhook abstraction but is not an authoritative decision transport: reviewers must take the decision in the dashboard so the SIWE-authenticated signature is captured for the audit record.
+
+**Rationale.** Email is unauthenticated at the transport level and cannot carry a binding decision signature. Webhook + dashboard gives a programmable notification channel and a single authoritative decision surface that integrates with the existing Audit_Logger oversight endpoint and SIWE auth (ADR-7 below uses the same flow).
+
+**Alternatives considered.** Email-only (rejected: cannot carry a signed decision); dashboard-only (acceptable but operationally rigid); push-only to per-agent webhook (acceptable but harder to audit centrally).
+
+**MVP vs post-MVP.** Oversight intervention itself is post-MVP (Task 18.2). The webhook is delivered alongside the dashboard reviewer queue; email is added later.
+
+**Affects.** Audit_Logger oversight endpoint; new `oversight_webhooks(handle, url, secret, created_at)` table post-MVP; no new property (Property 20 already covers the rejection-blocks-payments semantics).
+
+### ADR-7: Session key and operator signing — EIP-712 typed data with a fixed `AgentPayPayment` schema
+
+**Decision.** Session keys and operator-signed actions (policy updates, oversight decisions, SLA acceptance) use EIP-712 typed-data signing with a fixed domain separator `{name: "AgentPay", version: "1", chainId, verifyingContract: Identity_Registry}` and a small set of typed structs: `AgentPayPayment`, `PolicyUpdate`, `SessionKeyIssuance`, `OversightDecision`, `SlaAcceptance`. Raw ECDSA over canonical JSON is reserved for service-to-service signing (Obligation_Object, Evidence_Envelope) where there is no wallet in the loop.
+
+**Rationale.** EIP-712 is the default signing surface for every mainstream wallet (MetaMask, Rainbow, Coinbase Wallet, smart-account SDKs); it gives the user a structured human-readable signing dialog and a domain-separated signature that cannot be replayed against another contract or chain. Canonical JSON signing remains correct for off-chain records signed by services that are not wallets.
+
+**Alternatives considered.** Raw ECDSA over canonical JSON for everything (worse UX, no domain separation, every wallet shows a hex blob); EIP-191 `personal_sign` over a string (no field-level integrity, worse forensic record).
+
+**MVP vs post-MVP.** EIP-712 schemas are defined in MVP because the dashboard, SDK pay flow, and Policy_Engine all need them.
+
+**Affects.** `Policy_Engine` signature check; `AgentPay SDK` signing helpers; dashboard signing flows; the SIWE login (Property 27) is an orthogonal EIP-4361 flow.
+
+### ADR-8: Canonical JSON — own the spec, ship `@agentpay/canonical-json` and `agentpay_canonical_json`
+
+**Decision.** AgentPay ships its own canonical JSON implementation in TypeScript and Python (already declared under `packages/canonical-json-ts/` and `packages/canonical-json-py/`). The spec is RFC 8785 (JCS) with four tightenings already documented in the Canonical JSON subsection (lex-sorted keys, NFC normalisation, large numbers as strings, schema-restricted `null`). Cross-language interop is enforced by shared golden vectors (Task 1.4).
+
+**Rationale.** Existing JCS libraries differ on number handling (some emit floats with trailing zeros, some lose precision on integers above 2^53); when records are signed, any encoder disagreement breaks the signature. Owning the encoder makes the binary signing surface a first-class platform artifact and lets us pin behaviour exactly.
+
+**Alternatives considered.** Pull `@trust/jcs` and harden it (still leaves us re-validating every release); use protobuf (loses human-readability, changes the data-model story).
+
+**MVP vs post-MVP.** Already in MVP. Properties 22 and 23 cover round-trip and determinism.
+
+**Affects.** `canonical-json-*` packages; Properties 22, 23.
+
+### ADR-9: Kafka topic granularity — one topic per event family, partitioned by handle
+
+**Decision.** Use a small, fixed set of topics keyed by event family rather than per-service: `audit.events`, `obligation.transitions`, `policy.decisions`, `session_key.revocations`, `oversight.decisions`. Each topic is partitioned by `handle` (or `smart_account` where no handle exists), giving in-order delivery per agent while letting consumer groups scale horizontally.
+
+**Rationale.** Per-event-family topics keep the consumer mental model simple (one consumer reads "all audit events", not N consumers reading N service topics), let the audit reconciliation worker subscribe to exactly the topics it cares about, and avoid the fan-out problem of per-service topics where a new consumer has to discover and subscribe to every producer. Partitioning by handle preserves the per-agent ordering Property 19 relies on without serialising the whole stream.
+
+**Alternatives considered.** One topic per service (every consumer needs to know the full producer list; reconciliation worker becomes a hub); single global topic (loses parallelism); per-handle topic (Kafka topic explosion).
+
+**MVP vs post-MVP.** Topic list is fixed in MVP. Adding a new event family is a migration; adding a new event type within a family is not.
+
+**Affects.** `services/shared/kafka/`; consumer-group naming conventions; reconciliation worker design; no new property.
 
